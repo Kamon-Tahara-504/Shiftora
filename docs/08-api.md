@@ -24,10 +24,13 @@
 
 REST API の実務的な標準にかなり近い。
 
+**RBAC:** `/org/*` は org_admin のみ、`/staff/*` は staff のみ、`/admin/*` は system_role のみ許可。権限不足時は 403。
+
 ---
 
 ## Auth
 
+- `GET /auth/me` — 認証必須。現在のユーザー情報（id, email, organization_id, role, system_role）を返す。
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `POST /auth/logout`
