@@ -9,7 +9,7 @@ from app.auth.constants import (
     CODE_INVALID_TOKEN,
     CODE_VALIDATION_ERROR,
 )
-from app.auth.deps import get_current_user_id_from_token
+from app.auth.deps import CurrentUser, get_current_user
 from app.auth.service import login as do_login, logout as do_logout, refresh_tokens
 from app.config import get_settings
 
@@ -37,6 +37,21 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+@router.get("/me")
+def me(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
+    """
+    GET /auth/me
+    認証必須。現在のユーザー情報を返す（id, email, organization_id, role, system_role）。
+    """
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "organization_id": current_user.organization_id,
+        "role": current_user.role,
+        "system_role": current_user.system_role,
+    }
 
 
 @router.post("/login")
@@ -87,11 +102,11 @@ def refresh(body: RefreshRequest):
 
 
 @router.post("/logout")
-def logout(user_id: Annotated[str, Depends(get_current_user_id_from_token)]):
+def logout(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     """
     POST /auth/logout
     Authorization: Bearer <access_token> 必須。
     token_version を +1 してトークン失効。
     """
-    do_logout(user_id)
+    do_logout(current_user.id)
     return {"status": "ok"}
