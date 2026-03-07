@@ -1,6 +1,5 @@
 """環境変数・設定。pydantic-settings で .env を読み込む。"""
 from functools import lru_cache
-from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -16,8 +15,16 @@ class Settings(BaseSettings):
     supabase_url: str = ""
     supabase_service_role_key: str = ""
 
+    # JWT（環境変数 JWT_SECRET_KEY, JWT_ACCESS_EXPIRE_MINUTES, JWT_REFRESH_EXPIRE_DAYS）
+    jwt_secret_key: str = ""
+    jwt_access_expire_minutes: int = 15
+    jwt_refresh_expire_days: int = 7
+
     def supabase_configured(self) -> bool:
         return bool(self.supabase_url and self.supabase_service_role_key)
+
+    def jwt_configured(self) -> bool:
+        return bool(self.jwt_secret_key)
 
 
 @lru_cache
