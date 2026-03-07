@@ -2,15 +2,22 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 from app.auth.constants import (
+    CODE_EMAIL_ALREADY_REGISTERED,
     CODE_INVALID_CREDENTIALS,
     CODE_INVALID_TOKEN,
     CODE_VALIDATION_ERROR,
 )
 from app.auth.deps import CurrentUser, get_current_user
-from app.auth.service import login as do_login, logout as do_logout, refresh_tokens
+from app.auth.service import (
+    build_token_response,
+    login as do_login,
+    logout as do_logout,
+    refresh_tokens,
+    register_org as do_register_org,
+)
 from app.config import get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -30,6 +37,16 @@ def _require_jwt_configured() -> None:
         )
 
 
+def _require_auth_configured() -> None:
+    """JWT および Supabase 未設定なら 503。register-org 用。"""
+    s = get_settings()
+    if not s.jwt_configured() or not s.supabase_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Auth not configured",
+        )
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -37,6 +54,12 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class RegisterOrgRequest(BaseModel):
+    organization_name: str = Field(..., min_length=1, description="組織名")
+    admin_email: EmailStr
+    password: str = Field(..., min_length=8, description="8文字以上")
 
 
 @router.get("/me")
@@ -110,3 +133,34 @@ def logout(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     """
     do_logout(current_user.id)
     return {"status": "ok"}
+
+
+@router.post("/register-org", status_code=status.HTTP_201_CREATED)
+def register_org(body: RegisterOrgRequest):
+    """
+    POST /auth/register-org（認証不要）
+    組織・org_admin・subscription を同時に作成。body: organization_name, admin_email, password。
+    """
+    _require_auth_configured()
+    user = do_register_org(
+        organization_name=body.organization_name.strip(),
+        admin_email=body.admin_email.strip().lower(),
+        password=body.password,
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={
+                "code": CODE_EMAIL_ALREADY_REGISTERED,
+                "message": "This email is already registered",
+                "details": {"admin_email": body.admin_email},
+            },
+        )
+    tokens = build_token_response(user)
+    return {
+        "organization_id": str(user["organization_id"]),
+        "user_id": str(user["id"]),
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
+        "token_type": tokens["token_type"],
+    }
