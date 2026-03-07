@@ -1,0 +1,9 @@
+services:
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    # env_file: .env は feature/supabase-connection で Supabase 接続時に追加
+    # DB は Supabase のためローカルでは立てない
