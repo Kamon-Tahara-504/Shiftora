@@ -20,9 +20,15 @@ SYSTEM_ROLES: tuple[str, ...] = (
     SYSTEM_ROLE_BILLING_ADMIN,
 )
 
+# サブスクリプション（docs/04-database.md: 新規 org 作成時のデフォルト）
+SUBSCRIPTION_PLAN_TRIAL = "trial"
+SUBSCRIPTION_STATUS_ACTIVE = "active"
+SUBSCRIPTION_DEFAULT_MAX_USERS = 20
+
 # エラーコード（docs/08-api.md の形式に合わせる）
 CODE_VALIDATION_ERROR = "validation_error"
 CODE_INVALID_CREDENTIALS = "invalid_credentials"
 CODE_INVALID_TOKEN = "invalid_token"
 CODE_AUTH_NOT_CONFIGURED = "auth_not_configured"
 CODE_FORBIDDEN = "forbidden"
+CODE_EMAIL_ALREADY_REGISTERED = "email_already_registered"
