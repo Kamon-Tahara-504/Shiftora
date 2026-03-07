@@ -5,11 +5,13 @@ from fastapi import FastAPI
 
 from app.config import get_settings
 from app.db import get_supabase
+from app.auth.router import router as auth_router
 
 # プロジェクトルートの .env を読む（backend/app/main.py から見て ../../.env）
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 
 app = FastAPI(title="Shiftora API", version="0.1.0")
+app.include_router(auth_router)
 
 
 @app.get("/health")
