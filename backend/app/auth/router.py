@@ -14,6 +14,10 @@ from app.auth.constants import (
     CODE_VALIDATION_ERROR,
 )
 from app.auth.deps import CurrentUser, get_current_user
+from app.audit.service import (
+    EVENT_USER_ROLE_CHANGED,
+    append as audit_append,
+)
 from app.auth.service import (
     build_token_response,
     login as do_login,
@@ -209,6 +213,12 @@ def signup(body: SignupRequest):
                 "Invalid, expired, or already used invitation token",
             ),
         )
+    audit_append(
+        str(user["organization_id"]),
+        str(user["id"]),
+        EVENT_USER_ROLE_CHANGED,
+        {"role": user.get("role", "staff")},
+    )
     tokens = build_token_response(user)
     return {
         "user_id": str(user["id"]),
