@@ -38,3 +38,4 @@ CODE_INVALID_INVITATION = "invalid_invitation"
 CODE_MAX_USERS_EXCEEDED = "max_users_exceeded"
 CODE_SUBSCRIPTION_INACTIVE = "subscription_inactive"
 CODE_NOT_FOUND = "not_found"
+CODE_INVALID_PERIOD = "invalid_period"  # 過去月シフト生成禁止（docs/08）

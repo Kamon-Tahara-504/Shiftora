@@ -1,13 +1,16 @@
-"""組織 API: 招待・職員マスター。設計: docs/05-auth-and-invitation.md, docs/08-api.md。"""
+"""組織 API: 招待・職員マスター・シフト生成。設計: docs/05-auth-and-invitation.md, docs/08-api.md。"""
+from datetime import date
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from app.auth.constants import (
     CODE_AUTH_NOT_CONFIGURED,
     CODE_FORBIDDEN,
     CODE_INTERNAL_ERROR,
+    CODE_INVALID_PERIOD,
     CODE_MAX_USERS_EXCEEDED,
     CODE_NOT_FOUND,
     CODE_SUBSCRIPTION_INACTIVE,
@@ -22,7 +25,9 @@ from app.org.employees import (
     update_employee,
 )
 from app.org.service import create_invitation
+from app.org.shifts import delete_shifts_for_month, insert_shifts
 from app.org.subscription import can_org_invite_more
+from app.shift.service import generate_shifts, solve_result_to_api
 
 router = APIRouter(prefix="/org", tags=["org"])
 
@@ -211,3 +216,73 @@ def employees_update(
             detail=_error_detail(CODE_NOT_FOUND, "Employee not found"),
         )
     return _employee_to_response(emp)
+
+
+# --- シフト生成（docs/07, docs/08: 解なし時は 422 で missing_slots）---
+
+class GenerateShiftsBody(BaseModel):
+    """POST /org/shifts/generate の body。"""
+    year: int = Field(..., ge=2000, le=2100)
+    month: int = Field(..., ge=1, le=12)
+
+
+@router.post("/shifts/generate")
+def shifts_generate(
+    body: GenerateShiftsBody,
+    current_user: Annotated[CurrentUser, Depends(require_org_admin)],
+):
+    """
+    POST /org/shifts/generate（org_admin のみ）
+    body: { "year": 2026, "month": 4 }。過去月は 422 invalid_period。
+    解なし時は 422 で { "status": "infeasible", "missing_slots": [...] }（docs/07）。
+    """
+    if not get_settings().supabase_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+        )
+    org_id = _require_org_id(current_user)
+    today = date.today()
+    if (body.year, body.month) < (today.year, today.month):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(
+                CODE_INVALID_PERIOD,
+                "Cannot generate shifts for past months",
+                {"year": body.year, "month": body.month},
+            ),
+        )
+    result = generate_shifts(org_id, body.year, body.month)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to generate shifts"),
+        )
+    if result.status == "infeasible":
+        api_body = solve_result_to_api(result)
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content=api_body,
+        )
+    # status == "ok": 対象月を削除してから投入
+    if not delete_shifts_for_month(org_id, body.year, body.month):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to clear existing shifts"),
+        )
+    assignments = [
+        {
+            "date": a.date.isoformat(),
+            "slot": a.slot,
+            "department": a.department,
+            "employee_id": a.employee_id,
+        }
+        for a in result.assignments
+    ]
+    inserted = insert_shifts(org_id, assignments)
+    if inserted is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to save shifts"),
+        )
+    return {"status": "ok"}
