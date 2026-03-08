@@ -1,7 +1,9 @@
-"""職員 API: 希望休等。設計: docs/08-api.md。"""
+"""職員 API: 希望休・自分のシフト。設計: docs/08-api.md。"""
+import calendar
+from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.auth.constants import (
@@ -12,6 +14,7 @@ from app.auth.constants import (
 from app.auth.deps import CurrentUser
 from app.auth.rbac import require_staff
 from app.org.employees import get_employee_by_user_id
+from app.org.shifts import list_shifts_in_range
 from app.staff.day_offs import (
     create_day_off,
     delete_day_off,
@@ -107,3 +110,45 @@ def day_offs_delete(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=_error_detail(CODE_FORBIDDEN, "Cannot delete another user's request"),
         )
+
+
+@router.get("/shifts")
+def staff_shifts_list(
+    current_user: Annotated[CurrentUser, Depends(require_staff)],
+    year: int | None = Query(None, ge=2000, le=2100, description="年（month とセット）"),
+    month: int | None = Query(None, ge=1, le=12, description="月（year とセット）"),
+    start: str | None = Query(None, description="開始日 YYYY-MM-DD（end とセット）"),
+    end: str | None = Query(None, description="終了日 YYYY-MM-DD（start とセット）"),
+):
+    """
+    GET /staff/shifts（staff のみ）。自分のシフト一覧。期間指定必須。
+    year=2026&month=4 または start=2026-04-01&end=2026-04-30（docs/08）。
+    """
+    employee_id = _get_staff_employee_id(current_user)
+    org_id = current_user.organization_id
+    if start is not None and end is not None:
+        start_date, end_date = start, end
+    elif year is not None and month is not None:
+        _, last_day = calendar.monthrange(year, month)
+        start_date = date(year, month, 1).isoformat()
+        end_date = date(year, month, last_day).isoformat()
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(
+                CODE_VALIDATION_ERROR,
+                "Either year+month or start+end is required",
+                {},
+            ),
+        )
+    rows = list_shifts_in_range(org_id, start_date, end_date, employee_id=employee_id)
+    return [
+        {
+            "id": str(r["id"]),
+            "date": str(r["date"]),
+            "slot": r["slot"],
+            "department": r["department"],
+            "employee_id": str(r["employee_id"]),
+        }
+        for r in rows
+    ]
