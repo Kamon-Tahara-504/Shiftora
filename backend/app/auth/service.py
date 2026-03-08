@@ -1,10 +1,12 @@
 """認証サービス: ログイン・トークン検証・ログアウト（token_version 更新）。"""
+from datetime import datetime, timezone
 from typing import Any
 
 import bcrypt
 
 from app.auth.constants import (
     ROLE_ORG_ADMIN,
+    ROLE_STAFF,
     SUBSCRIPTION_DEFAULT_MAX_USERS,
     SUBSCRIPTION_PLAN_TRIAL,
     SUBSCRIPTION_STATUS_ACTIVE,
@@ -177,4 +179,89 @@ def register_org(
             "max_users": SUBSCRIPTION_DEFAULT_MAX_USERS,
         }
     ).execute()
+    return user
+
+
+def _get_invitation_by_token(token: str) -> dict[str, Any] | None:
+    """
+    招待トークンで invitation_tokens を 1 件取得する。
+    存在しない・used・期限切れの場合は None。
+    """
+    supabase = get_supabase()
+    if not supabase:
+        return None
+    r = (
+        supabase.table("invitation_tokens")
+        .select("*")
+        .eq("token", token.strip())
+        .maybe_single()
+        .execute()
+    )
+    if not r.data:
+        return None
+    inv = r.data
+    if inv.get("used") is True:
+        return None
+    expires_at = inv.get("expires_at")
+    if not expires_at:
+        return None
+    # Supabase は ISO 文字列で返すことが多い
+    if isinstance(expires_at, str):
+        try:
+            exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+    else:
+        exp_dt = expires_at
+    if exp_dt.tzinfo is None:
+        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) >= exp_dt:
+        return None
+    return inv
+
+
+def signup(token: str, password: str) -> dict[str, Any] | None:
+    """
+    招待受け入れ・パスワード設定（docs/05-auth-and-invitation.md）。
+    token 検証 → users 作成 → invitation_tokens.used 更新。
+    成功時は作成した user の辞書を返す。失敗時は None。
+    employees との紐付けは、現スキーマに email がないため未実装（Phase 3.1 等で対応可）。
+    """
+    inv = _get_invitation_by_token(token)
+    if not inv:
+        return None
+    email = (inv.get("email") or "").strip().lower()
+    organization_id = inv.get("organization_id")
+    role = inv.get("role") or ROLE_STAFF
+    if not email or not organization_id:
+        return None
+    if get_user_by_email(email) is not None:
+        return None
+    supabase = get_supabase()
+    if not supabase:
+        return None
+    if not get_settings().supabase_configured():
+        return None
+    user_r = (
+        supabase.table("users")
+        .insert(
+            {
+                "organization_id": organization_id,
+                "email": email,
+                "password_hash": hash_password(password),
+                "role": role,
+                "token_version": 0,
+                "is_active": True,
+            }
+        )
+        .execute()
+    )
+    if not user_r.data or len(user_r.data) == 0:
+        return None
+    user = user_r.data[0]
+    inv_id = inv.get("id")
+    if inv_id:
+        supabase.table("invitation_tokens").update({"used": True}).eq(
+            "id", inv_id
+        ).execute()
     return user
