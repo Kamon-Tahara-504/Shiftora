@@ -7,6 +7,7 @@ from pydantic import BaseModel, EmailStr, Field
 from app.auth.constants import (
     CODE_EMAIL_ALREADY_REGISTERED,
     CODE_INVALID_CREDENTIALS,
+    CODE_INVALID_INVITATION,
     CODE_INVALID_TOKEN,
     CODE_VALIDATION_ERROR,
 )
@@ -17,6 +18,7 @@ from app.auth.service import (
     logout as do_logout,
     refresh_tokens,
     register_org as do_register_org,
+    signup as do_signup,
 )
 from app.config import get_settings
 
@@ -59,6 +61,12 @@ class RefreshRequest(BaseModel):
 class RegisterOrgRequest(BaseModel):
     organization_name: str = Field(..., min_length=1, description="組織名")
     admin_email: EmailStr
+    password: str = Field(..., min_length=8, description="8文字以上")
+
+
+class SignupRequest(BaseModel):
+    """POST /auth/signup。招待トークンとパスワードでユーザー作成。"""
+    token: str = Field(..., min_length=1, description="招待トークン")
     password: str = Field(..., min_length=8, description="8文字以上")
 
 
@@ -160,6 +168,32 @@ def register_org(body: RegisterOrgRequest):
     return {
         "organization_id": str(user["organization_id"]),
         "user_id": str(user["id"]),
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
+        "token_type": tokens["token_type"],
+    }
+
+
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
+def signup(body: SignupRequest):
+    """
+    POST /auth/signup（認証不要）
+    招待トークンでパスワードを設定しユーザーを作成。body: { "token": "...", "password": "..." }。
+    """
+    _require_auth_configured()
+    user = do_signup(token=body.token.strip(), password=body.password)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(
+                CODE_INVALID_INVITATION,
+                "Invalid, expired, or already used invitation token",
+            ),
+        )
+    tokens = build_token_response(user)
+    return {
+        "user_id": str(user["id"]),
+        "organization_id": str(user["organization_id"]),
         "access_token": tokens["access_token"],
         "refresh_token": tokens["refresh_token"],
         "token_type": tokens["token_type"],
