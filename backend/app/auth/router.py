@@ -9,6 +9,8 @@ from app.auth.constants import (
     CODE_INVALID_CREDENTIALS,
     CODE_INVALID_INVITATION,
     CODE_INVALID_TOKEN,
+    CODE_MAX_USERS_EXCEEDED,
+    CODE_SUBSCRIPTION_INACTIVE,
     CODE_VALIDATION_ERROR,
 )
 from app.auth.deps import CurrentUser, get_current_user
@@ -179,10 +181,27 @@ def signup(body: SignupRequest):
     """
     POST /auth/signup（認証不要）
     招待トークンでパスワードを設定しユーザーを作成。body: { "token": "...", "password": "..." }。
+    max_users 超過時は 422（docs/06）。
     """
     _require_auth_configured()
-    user = do_signup(token=body.token.strip(), password=body.password)
+    user, error_code = do_signup(token=body.token.strip(), password=body.password)
     if user is None:
+        if error_code == "max_users_exceeded":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_error_detail(
+                    CODE_MAX_USERS_EXCEEDED,
+                    "Cannot sign up: organization user limit reached",
+                ),
+            )
+        if error_code == "subscription_inactive":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_error_detail(
+                    CODE_SUBSCRIPTION_INACTIVE,
+                    "Cannot sign up: subscription is not active",
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(
