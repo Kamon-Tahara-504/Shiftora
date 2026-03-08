@@ -25,7 +25,13 @@ from app.org.employees import (
     update_employee,
 )
 from app.org.service import create_invitation
-from app.org.shifts import delete_shifts_for_month, insert_shifts
+from app.org.shifts import (
+    delete_shifts_for_month,
+    get_shift,
+    insert_shifts,
+    list_shifts,
+    update_shift,
+)
 from app.org.subscription import can_org_invite_more
 from app.shift.service import generate_shifts, solve_result_to_api
 
@@ -286,3 +292,78 @@ def shifts_generate(
             detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to save shifts"),
         )
     return {"status": "ok"}
+
+
+# --- シフト取得・手動修正（docs/08）---
+
+def _shift_to_response(row: dict[str, Any]) -> dict[str, Any]:
+    """DB の shift 行を API レスポンス用に変換（id 必須）。"""
+    return {
+        "id": str(row["id"]),
+        "date": str(row["date"]),
+        "slot": row["slot"],
+        "department": row["department"],
+        "employee_id": str(row["employee_id"]),
+    }
+
+
+@router.get("/shifts")
+def shifts_list(
+    current_user: Annotated[CurrentUser, Depends(require_org_admin)],
+    year: int = Query(..., ge=2000, le=2100, description="年"),
+    month: int = Query(..., ge=1, le=12, description="月"),
+):
+    """
+    GET /org/shifts（org_admin のみ）
+    クエリ year, month 必須。各要素に id を含める（docs/08）。
+    """
+    if not get_settings().supabase_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+        )
+    org_id = _require_org_id(current_user)
+    rows = list_shifts(org_id, year, month)
+    return [_shift_to_response(r) for r in rows]
+
+
+class ShiftPatchBody(BaseModel):
+    """PATCH /org/shifts/{id} の body。すべて任意。"""
+    employee_id: str | None = None
+    department: Literal["daycare", "visit"] | None = None
+    slot: Literal["AM", "PM"] | None = None
+
+
+@router.patch("/shifts/{shift_id}")
+def shifts_patch(
+    shift_id: str,
+    body: ShiftPatchBody,
+    current_user: Annotated[CurrentUser, Depends(require_org_admin)],
+):
+    """
+    PATCH /org/shifts/{id}（org_admin のみ）
+    手動修正。更新可: employee_id, department, slot（docs/08）。
+    """
+    if not get_settings().supabase_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+        )
+    org_id = _require_org_id(current_user)
+    updates = body.model_dump(exclude_unset=True)
+    if not updates:
+        # 何も更新しない場合は現状を返す
+        row = get_shift(org_id, shift_id)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
+            )
+        return _shift_to_response(row)
+    updated = update_shift(org_id, shift_id, **updates)
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
+        )
+    return _shift_to_response(updated)
