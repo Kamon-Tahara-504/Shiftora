@@ -20,9 +20,10 @@ SYSTEM_ROLES: tuple[str, ...] = (
     SYSTEM_ROLE_BILLING_ADMIN,
 )
 
-# サブスクリプション（docs/04-database.md: 新規 org 作成時のデフォルト）
+# サブスクリプション（docs/04-database.md, docs/06-subscription.md）
 SUBSCRIPTION_PLAN_TRIAL = "trial"
 SUBSCRIPTION_STATUS_ACTIVE = "active"
+SUBSCRIPTION_STATUS_SUSPENDED = "suspended"
 SUBSCRIPTION_DEFAULT_MAX_USERS = 20
 
 # エラーコード（docs/08-api.md の形式に合わせる）
@@ -34,3 +35,5 @@ CODE_FORBIDDEN = "forbidden"
 CODE_EMAIL_ALREADY_REGISTERED = "email_already_registered"
 CODE_INTERNAL_ERROR = "internal_error"
 CODE_INVALID_INVITATION = "invalid_invitation"
+CODE_MAX_USERS_EXCEEDED = "max_users_exceeded"
+CODE_SUBSCRIPTION_INACTIVE = "subscription_inactive"
