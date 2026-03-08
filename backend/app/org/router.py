@@ -8,11 +8,14 @@ from app.auth.constants import (
     CODE_AUTH_NOT_CONFIGURED,
     CODE_FORBIDDEN,
     CODE_INTERNAL_ERROR,
+    CODE_MAX_USERS_EXCEEDED,
+    CODE_SUBSCRIPTION_INACTIVE,
 )
 from app.auth.deps import CurrentUser
 from app.auth.rbac import require_org_admin
 from app.config import get_settings
 from app.org.service import create_invitation
+from app.org.subscription import can_org_invite_more
 
 router = APIRouter(prefix="/org", tags=["org"])
 
@@ -48,6 +51,23 @@ def invite(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=_error_detail(CODE_FORBIDDEN, "Insufficient permissions"),
+        )
+    can_invite, reason = can_org_invite_more(org_id)
+    if not can_invite:
+        if reason == "max_users_exceeded":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=_error_detail(
+                    CODE_MAX_USERS_EXCEEDED,
+                    "Cannot invite: organization user limit reached",
+                ),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(
+                CODE_SUBSCRIPTION_INACTIVE,
+                "Cannot invite: subscription is not active",
+            ),
         )
     result = create_invitation(
         organization_id=org_id,
