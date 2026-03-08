@@ -139,12 +139,25 @@ Shiftora/
 ├── LICENSE
 ├── docker-compose.yml   # API コンテナ（ローカル）
 ├── .env.example
+├── frontend/            # Next.js（SPA）、App Router、TypeScript、Tailwind
+│   ├── src/app/         # ページ・レイアウト（(org), (staff) は Route Groups）
+│   ├── src/lib/         # API クライアント等
+│   └── .env.local.example
 ├── backend/
-│   ├── Dockerfile
+│   ├── Dockerfile      # Railway は Root Directory = backend、PORT 対応済み
 │   ├── requirements.txt
 │   └── app/
-│       ├── main.py      # FastAPI エントリ
-│       └── auth/        # 認証・RBAC・register-org
+│       ├── main.py     # FastAPI エントリ・例外ハンドラ登録
+│       ├── config.py   # 環境変数（pydantic-settings）
+│       ├── db.py       # Supabase クライアント
+│       ├── error_handling.py  # グローバル例外ハンドラ・エラー形式統一
+│       ├── auth/       # 認証・JWT・RBAC・register-org・signup
+│       ├── org/        # 招待・職員マスター・シフト生成・シフト取得・更新
+│       ├── staff/      # 希望休・自分のシフト
+│       ├── shift/      # シフト生成ロジック（OR-Tools・データ取得・求解）
+│       └── audit/      # 監査ログ（audit_logs 追記）
+├── supabase/
+│   └── migrations/     # 初期スキーマ・RLS
 └── docs/
     ├── 00-index.md
     ├── 01-overview.md
@@ -163,9 +176,10 @@ Shiftora/
 ```
 
 - **ルート:** 設定・Docker・ドキュメント。`.env` は git に含めない。
-- **backend/app:** FastAPI アプリ。`auth` に認証・RBAC・register-org を集約。
+- **frontend:** Next.js（SPA）、App Router、TypeScript、Tailwind。API は `NEXT_PUBLIC_API_URL` で指定。
+- **backend/app:** FastAPI アプリ。`auth`（認証・RBAC）、`org`（組織・職員・シフト）、`staff`（職員向け API）、`shift`（OR-Tools 求解）、`audit`（監査ログ）に責務を分離。
 
----
+
 
 ## commitメッセージ
 
