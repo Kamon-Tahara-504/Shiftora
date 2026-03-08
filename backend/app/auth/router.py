@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 
 from app.auth.constants import (
+    CODE_AUTH_NOT_CONFIGURED,
     CODE_EMAIL_ALREADY_REGISTERED,
     CODE_INVALID_CREDENTIALS,
     CODE_INVALID_INVITATION,
@@ -41,7 +42,7 @@ def _require_jwt_configured() -> None:
     if not get_settings().jwt_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Auth not configured",
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
         )
 
 
@@ -51,7 +52,7 @@ def _require_auth_configured() -> None:
     if not s.jwt_configured() or not s.supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Auth not configured",
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
         )
 
 
