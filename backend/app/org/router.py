@@ -24,6 +24,13 @@ from app.org.employees import (
     list_employees,
     update_employee,
 )
+from app.audit.service import (
+    EVENT_EMPLOYEE_CREATED,
+    EVENT_INVITATION_CREATED,
+    EVENT_SHIFT_GENERATED,
+    EVENT_SHIFT_UPDATED,
+    append as audit_append,
+)
 from app.org.service import create_invitation
 from app.org.shifts import (
     delete_shifts_for_month,
@@ -92,6 +99,13 @@ def invite(
         email=body.email,
         role=body.role,
     )
+    if result is not None:
+        audit_append(
+            org_id,
+            current_user.id,
+            EVENT_INVITATION_CREATED,
+            {"email": body.email, "role": body.role},
+        )
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -198,6 +212,12 @@ def employees_create(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to create employee"),
         )
+    audit_append(
+        org_id,
+        current_user.id,
+        EVENT_EMPLOYEE_CREATED,
+        {"employee_id": str(emp["id"]), "name": emp.get("name")},
+    )
     return _employee_to_response(emp)
 
 
@@ -291,6 +311,12 @@ def shifts_generate(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to save shifts"),
         )
+    audit_append(
+        org_id,
+        current_user.id,
+        EVENT_SHIFT_GENERATED,
+        {"year": body.year, "month": body.month, "assignments_count": len(inserted)},
+    )
     return {"status": "ok"}
 
 
@@ -360,10 +386,30 @@ def shifts_patch(
                 detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
             )
         return _shift_to_response(row)
+    before = get_shift(org_id, shift_id)
+    if not before:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
+        )
     updated = update_shift(org_id, shift_id, **updates)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
         )
+    audit_append(
+        org_id,
+        current_user.id,
+        EVENT_SHIFT_UPDATED,
+        {
+            "shift_id": shift_id,
+            "before_employee": str(before["employee_id"]),
+            "after_employee": str(updated["employee_id"]),
+            "before_department": before["department"],
+            "after_department": updated["department"],
+            "before_slot": before["slot"],
+            "after_slot": updated["slot"],
+        },
+    )
     return _shift_to_response(updated)
