@@ -16,6 +16,7 @@ from app.auth.constants import (
 from app.auth.jwt import create_access_token, create_refresh_token, decode_token
 from app.config import get_settings
 from app.db import get_supabase
+from app.org.subscription import can_org_invite_more
 
 
 def _user_to_token_payload(user: dict[str, Any]) -> tuple[str, str | None, Any, Any, int]:
@@ -220,28 +221,31 @@ def _get_invitation_by_token(token: str) -> dict[str, Any] | None:
     return inv
 
 
-def signup(token: str, password: str) -> dict[str, Any] | None:
+def signup(token: str, password: str) -> tuple[dict[str, Any] | None, str | None]:
     """
     招待受け入れ・パスワード設定（docs/05-auth-and-invitation.md）。
-    token 検証 → users 作成 → invitation_tokens.used 更新。
-    成功時は作成した user の辞書を返す。失敗時は None。
-    employees との紐付けは、現スキーマに email がないため未実装（Phase 3.1 等で対応可）。
+    token 検証 → max_users チェック（docs/06）→ users 作成 → invitation_tokens.used 更新。
+    戻り値: (user, None) で成功。(None, error_code) で失敗。
+    error_code: "invalid_invitation" | "max_users_exceeded" | "subscription_inactive"
     """
     inv = _get_invitation_by_token(token)
     if not inv:
-        return None
+        return None, "invalid_invitation"
     email = (inv.get("email") or "").strip().lower()
     organization_id = inv.get("organization_id")
     role = inv.get("role") or ROLE_STAFF
     if not email or not organization_id:
-        return None
+        return None, "invalid_invitation"
     if get_user_by_email(email) is not None:
-        return None
+        return None, "invalid_invitation"
+    can_invite, reason = can_org_invite_more(organization_id)
+    if not can_invite and reason:
+        return None, reason
     supabase = get_supabase()
     if not supabase:
-        return None
+        return None, "invalid_invitation"
     if not get_settings().supabase_configured():
-        return None
+        return None, "invalid_invitation"
     user_r = (
         supabase.table("users")
         .insert(
@@ -257,11 +261,11 @@ def signup(token: str, password: str) -> dict[str, Any] | None:
         .execute()
     )
     if not user_r.data or len(user_r.data) == 0:
-        return None
+        return None, "invalid_invitation"
     user = user_r.data[0]
     inv_id = inv.get("id")
     if inv_id:
         supabase.table("invitation_tokens").update({"used": True}).eq(
             "id", inv_id
         ).execute()
-    return user
+    return user, None
