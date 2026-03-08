@@ -86,6 +86,25 @@ def get_employee(organization_id: str, employee_id: str) -> dict[str, Any] | Non
     return r.data if r.data else None
 
 
+def get_employee_by_user_id(
+    organization_id: str,
+    user_id: str,
+) -> dict[str, Any] | None:
+    """組織内で user_id に紐づく職員を 1 件取得する。staff の自社員解決用。"""
+    supabase = get_supabase()
+    if not supabase:
+        return None
+    r = (
+        supabase.table("employees")
+        .select("*")
+        .eq("organization_id", organization_id)
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    return r.data if r.data else None
+
+
 def update_employee(
     organization_id: str,
     employee_id: str,
