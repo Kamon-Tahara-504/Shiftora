@@ -20,11 +20,21 @@ class Settings(BaseSettings):
     jwt_access_expire_minutes: int = 15
     jwt_refresh_expire_days: int = 7
 
+    # CORS（フロント開発用。環境変数 CORS_ORIGINS をカンマ区切りで指定）
+    cors_origins: str = ""
+
     def supabase_configured(self) -> bool:
         return bool(self.supabase_url and self.supabase_service_role_key)
 
     def jwt_configured(self) -> bool:
         return bool(self.jwt_secret_key)
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        """CORS 許可オリジン（空文字は空リスト）。"""
+        if not self.cors_origins.strip():
+            return []
+        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
 
 @lru_cache

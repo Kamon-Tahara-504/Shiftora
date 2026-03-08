@@ -3,6 +3,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
 from app.db import get_supabase
@@ -21,6 +22,15 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="Shiftora API", version="0.1.0")
+origins = get_settings().cors_origins_list
+if origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 register_handlers(app)
 app.include_router(auth_router)
 app.include_router(org_router)
