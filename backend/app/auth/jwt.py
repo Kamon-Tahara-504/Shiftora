@@ -3,7 +3,12 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import jwt
-from jwt import PyJWLError
+
+# PyJWT 2.x は PyJWLError、3.x は PyJWTError
+try:
+    from jwt import PyJWTError
+except ImportError:
+    from jwt import PyJWLError as PyJWTError
 
 from app.auth.constants import TOKEN_TYPE_ACCESS, TOKEN_TYPE_REFRESH
 from app.config import get_settings
@@ -65,5 +70,5 @@ def decode_token(token: str) -> dict[str, Any] | None:
             settings.jwt_secret_key,
             algorithms=[ALGORITHM],
         )
-    except PyJWLError:
+    except PyJWTError:
         return None
