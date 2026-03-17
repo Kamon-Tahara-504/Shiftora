@@ -12,14 +12,9 @@ import {
 } from "lucide-react";
 import { StaffSidebar } from "@/components/staff/StaffSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
+import { useDayOffs } from "@/hooks/useDayOffs";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-
-type DayOffRequest = {
-  id: string;
-  date: string; // ISO string YYYY-MM-DD
-  status: "pending" | "approved" | "rejected";
-};
 
 type CalendarCell = {
   key: string;
@@ -27,6 +22,7 @@ type CalendarCell = {
   month: number;
   year: number;
   isCurrentMonth: boolean;
+  dateString: string;
 };
 
 function getMonthCells(year: number, month: number): CalendarCell[] {
@@ -40,47 +36,39 @@ function getMonthCells(year: number, month: number): CalendarCell[] {
     const cellYear = dateObj.getFullYear();
     const cellMonth = dateObj.getMonth() + 1;
     const cellDate = dateObj.getDate();
+    const y = cellYear;
+    const m = String(cellMonth).padStart(2, "0");
+    const d = String(cellDate).padStart(2, "0");
     cells.push({
       key: `${cellYear}-${cellMonth}-${cellDate}-${i}`,
       date: cellDate,
       month: cellMonth,
       year: cellYear,
       isCurrentMonth: cellMonth === month,
+      dateString: `${y}-${m}-${d}`,
     });
   }
 
   return cells;
 }
 
-const DUMMY_DAY_OFFS: DayOffRequest[] = [
-  { id: "1", date: "2023-10-15", status: "approved" },
-  { id: "2", date: "2023-10-20", status: "pending" },
-];
-
 export default function DayOffsPage() {
-  const [year, setYear] = useState(2023);
-  const [month, setMonth] = useState(10);
-  const [requests, setRequests] = useState<DayOffRequest[]>(DUMMY_DAY_OFFS);
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
+  const { requests, error, addRequest, removeRequest, refresh } = useDayOffs();
 
   const cells = useMemo(() => getMonthCells(year, month), [year, month]);
   const monthLabel = `${year}年 ${month}月`;
 
-  const toggleDayOff = (cell: CalendarCell) => {
+  const toggleDayOff = async (cell: CalendarCell) => {
     if (!cell.isCurrentMonth) return;
-    const dateStr = `${cell.year}-${String(cell.month).padStart(2, "0")}-${String(
-      cell.date
-    ).padStart(2, "0")}`;
-    const existing = requests.find((r) => r.date === dateStr);
+    const existing = requests.find((r) => r.date === cell.dateString);
 
     if (existing) {
-      if (existing.status === "pending") {
-        setRequests((prev) => prev.filter((r) => r.id !== existing.id));
-      }
+      await removeRequest(existing.id);
     } else {
-      setRequests((prev) => [
-        ...prev,
-        { id: Math.random().toString(36).substr(2, 9), date: dateStr, status: "pending" },
-      ]);
+      await addRequest(cell.dateString);
     }
   };
 
@@ -113,9 +101,7 @@ export default function DayOffsPage() {
 
   return (
     <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
-      <div className="h-screen overflow-y-auto">
-        <StaffSidebar />
-      </div>
+      <StaffSidebar />
 
       <main className="flex-1 h-screen overflow-y-auto bg-background-light p-8">
         <div className="max-w-6xl mx-auto w-full">
@@ -123,6 +109,13 @@ export default function DayOffsPage() {
             title="希望休の申請"
             description="カレンダーから日付を選択して、希望休を申請できます。確定後の変更は管理者へ連絡してください。"
           />
+
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
+              <AlertCircle className="size-5 text-red-500" />
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
@@ -169,13 +162,8 @@ export default function DayOffsPage() {
                   ))}
 
                   {cells.map((cell) => {
-                    const dateStr = `${cell.year}-${String(cell.month).padStart(
-                      2,
-                      "0"
-                    )}-${String(cell.date).padStart(2, "0")}`;
-                    const request = requests.find((r) => r.date === dateStr);
-                    const isSelected = request?.status === "pending";
-                    const isApproved = request?.status === "approved";
+                    const request = requests.find((r) => r.date === cell.dateString);
+                    const isSelected = !!request;
 
                     return (
                       <div
@@ -186,14 +174,12 @@ export default function DayOffsPage() {
                         } ${
                           isSelected
                             ? "bg-primary/5 ring-2 ring-primary ring-inset"
-                            : isApproved
-                            ? "bg-emerald-50"
                             : ""
                         }`}
                       >
                         <span
                           className={`text-xs ${
-                            isSelected || isApproved ? "font-bold text-primary" : ""
+                            isSelected ? "font-bold text-primary" : ""
                           }`}
                         >
                           {cell.date}
@@ -202,12 +188,6 @@ export default function DayOffsPage() {
                           <div className="bg-primary text-white text-[10px] p-1 rounded font-bold leading-tight flex items-center gap-1 mt-auto">
                             <Clock className="size-3" />
                             <span>申請中</span>
-                          </div>
-                        )}
-                        {isApproved && (
-                          <div className="bg-emerald-500 text-white text-[10px] p-1 rounded font-bold leading-tight flex items-center gap-1 mt-auto">
-                            <PlaneTakeoff className="size-3" />
-                            <span>確定</span>
                           </div>
                         )}
                       </div>
@@ -225,7 +205,6 @@ export default function DayOffsPage() {
                     <li>
                       確定済みの希望休を取り消す場合は、直接管理者に連絡してください。
                     </li>
-                    <li>希望休は月間最大5日まで申請可能です（デモ版制限なし）。</li>
                   </ul>
                 </div>
               </div>
@@ -253,27 +232,19 @@ export default function DayOffsPage() {
                             <p className="text-sm font-bold text-slate-700">
                               {r.date.replace(/-/g, "/")}
                             </p>
-                            <p
-                              className={`text-[10px] font-bold ${
-                                r.status === "approved"
-                                  ? "text-emerald-600"
-                                  : "text-primary"
-                              }`}
-                            >
-                              {r.status === "approved" ? "確定済み" : "申請中"}
+                            <p className="text-[10px] font-bold text-primary">
+                              申請中
                             </p>
                           </div>
-                          {r.status === "pending" && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRequests((prev) => prev.filter((x) => x.id !== r.id));
-                              }}
-                              className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="size-4" />
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeRequest(r.id);
+                            }}
+                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -282,10 +253,10 @@ export default function DayOffsPage() {
                 <div className="p-4 bg-slate-50 border-t border-slate-200">
                   <button
                     type="button"
-                    disabled={currentMonthRequests.length === 0}
-                    className="w-full bg-primary text-white py-2.5 rounded-lg text-sm font-bold hover:bg-primary/90 transition-all shadow-sm shadow-primary/20 disabled:opacity-50 disabled:shadow-none"
+                    onClick={refresh}
+                    className="w-full bg-white border border-slate-200 text-slate-700 py-2.5 rounded-lg text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
                   >
-                    申請を送信する
+                    再読み込み
                   </button>
                 </div>
               </section>
@@ -295,20 +266,14 @@ export default function DayOffsPage() {
                   <Clock className="size-4 text-primary" />
                   申請状況
                 </h3>
-                <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="grid grid-cols-1 gap-4 text-center">
                   <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                     <p className="text-[10px] font-bold text-slate-500 uppercase">
-                      今月の申請
+                      今月の申請数
                     </p>
                     <p className="text-xl font-black text-slate-700">
                       {currentMonthRequests.length}
                     </p>
-                  </div>
-                  <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">
-                      残り可能数
-                    </p>
-                    <p className="text-xl font-black text-slate-700">--</p>
                   </div>
                 </div>
               </section>
@@ -319,3 +284,4 @@ export default function DayOffsPage() {
     </div>
   );
 }
+

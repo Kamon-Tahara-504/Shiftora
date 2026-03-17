@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, CalendarPlus } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
+import { useShifts } from "@/hooks/useShifts";
+import { useEmployees } from "@/hooks/useEmployees";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -12,6 +14,7 @@ type CalendarDay = {
   month: number;
   year: number;
   isCurrentMonth: boolean;
+  dateString: string;
 };
 
 function getCalendarDays(year: number, month: number): CalendarDay[] {
@@ -22,24 +25,58 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
   for (let i = 0; i < 42; i++) {
     const d = startDate + i;
     const dateObj = new Date(year, month - 1, d);
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const day = String(dateObj.getDate()).padStart(2, "0");
     days.push({
       date: dateObj.getDate(),
       month: dateObj.getMonth() + 1,
       year: dateObj.getFullYear(),
       isCurrentMonth: dateObj.getMonth() === month - 1,
+      dateString: `${y}-${m}-${day}`,
     });
   }
   return days;
 }
 
 export default function ShiftCalendarPage() {
-  const [displayYear, setDisplayYear] = useState(2023);
-  const [displayMonth, setDisplayMonth] = useState(10);
+  const today = new Date();
+  const [displayYear, setDisplayYear] = useState(today.getFullYear());
+  const [displayMonth, setDisplayMonth] = useState(today.getMonth() + 1);
+  const { shifts, isLoading: isShiftsLoading, fetchShifts } = useShifts();
+  const { employees } = useEmployees();
+
+  useEffect(() => {
+    fetchShifts(displayYear, displayMonth);
+  }, [displayYear, displayMonth, fetchShifts]);
 
   const calendarDays = useMemo(
     () => getCalendarDays(displayYear, displayMonth),
     [displayYear, displayMonth]
   );
+
+  const shiftsByDate = useMemo(() => {
+    const map: Record<string, typeof shifts> = {};
+    shifts.forEach((s) => {
+      if (!map[s.date]) map[s.date] = [];
+      map[s.date].push(s);
+    });
+    return map;
+  }, [shifts]);
+
+  const employeeMap = useMemo(() => {
+    const map: Record<string, typeof employees[0]> = {};
+    employees.forEach((e) => {
+      map[e.id] = e;
+    });
+    return map;
+  }, [employees]);
+
+  const stats = useMemo(() => {
+    const daycareCount = shifts.filter(s => s.department === "daycare").length;
+    const visitCount = shifts.filter(s => s.department === "visit").length;
+    return { daycareCount, visitCount };
+  }, [shifts]);
 
   const goPrevMonth = () => {
     if (displayMonth === 1) {
@@ -83,20 +120,6 @@ export default function ShiftCalendarPage() {
             }
             actions={
               <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex bg-white rounded-lg border border-slate-200 p-1">
-                  <button
-                    type="button"
-                    className="px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md hover:bg-slate-50"
-                  >
-                    日
-                  </button>
-                  <button
-                    type="button"
-                    className="px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md hover:bg-slate-50"
-                  >
-                    週
-                  </button>
-                </div>
                 <div className="flex items-center bg-white rounded-lg border border-slate-200 px-3 py-1.5 gap-4">
                   <button
                     type="button"
@@ -145,6 +168,8 @@ export default function ShiftCalendarPage() {
               {calendarDays.map((cell, index) => {
                 const isLastInRow = (index + 1) % 7 === 0;
                 const isCurrentMonth = cell.isCurrentMonth;
+                const dateShifts = shiftsByDate[cell.dateString] || [];
+
                 return (
                   <div
                     key={`${cell.year}-${cell.month}-${cell.date}-${index}`}
@@ -159,65 +184,45 @@ export default function ShiftCalendarPage() {
                     >
                       {cell.date}
                     </span>
-                    <div className="mt-2 flex flex-col gap-1" />
+                    <div className="mt-2 flex flex-col gap-1">
+                      {dateShifts.map((s) => {
+                        const employee = employeeMap[s.employee_id];
+                        const isDaycare = s.department === "daycare";
+                        return (
+                          <div
+                            key={s.id}
+                            className={`text-[10px] px-1.5 py-0.5 rounded flex items-center justify-between border ${
+                              isDaycare 
+                                ? "bg-primary/10 text-primary border-primary/20" 
+                                : "bg-purple-50 text-purple-600 border-purple-100"
+                            }`}
+                          >
+                            <span className="truncate font-medium">{employee?.name || "???"}</span>
+                            <span className="shrink-0 scale-90">{s.slot}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* 職員配置サマリー＋統計 */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold">職員配置サマリー</h3>
-                <button
-                  type="button"
-                  className="text-sm text-primary font-bold hover:underline"
-                >
-                  全リストを表示
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div className="p-6 rounded-lg border border-dashed border-slate-200 text-center text-sm text-slate-500">
-                  職員配置サマリーのデータは未連携です
-                </div>
-              </div>
+          {/* 統計 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">デイサービス</p>
+              <h4 className="text-2xl font-black text-primary">{isShiftsLoading ? "..." : stats.daycareCount} 枠</h4>
+              <p className="text-xs text-slate-500 mt-1">今月の総割り当て数</p>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-              <h3 className="text-lg font-bold mb-4">統計</h3>
-              <div className="space-y-4">
-                <div className="bg-primary/5 rounded-xl p-4 border border-primary/10">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    デイサービス・コーディネーター
-                  </p>
-                  <div className="flex items-end justify-between">
-                    <h4 className="text-3xl font-black text-primary">--</h4>
-                    <span className="text-xs font-bold text-slate-500 pb-1">
-                      今後14日間
-                    </span>
-                  </div>
-                </div>
-                <div className="bg-purple-500/5 rounded-xl p-4 border border-purple-500/10">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    ケア・スペシャリスト
-                  </p>
-                  <div className="flex items-end justify-between">
-                    <h4 className="text-3xl font-black text-purple-500">--</h4>
-                    <span className="text-xs font-bold text-slate-500 pb-1">
-                      承認待ち
-                    </span>
-                  </div>
-                </div>
-                <div className="p-2">
-                  <button
-                    type="button"
-                    className="w-full py-3 rounded-lg border-2 border-slate-200 text-sm font-bold hover:bg-slate-50 transition-colors"
-                  >
-                    スケジュールを書き出し (PDF)
-                  </button>
-                </div>
-              </div>
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">訪問介護</p>
+              <h4 className="text-2xl font-black text-purple-500">{isShiftsLoading ? "..." : stats.visitCount} 枠</h4>
+              <p className="text-xs text-slate-500 mt-1">今月の総割り当て数</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex items-center justify-center">
+              <p className="text-xs text-slate-400">PDF書き出し機能は今後実装予定です</p>
             </div>
           </div>
         </div>
@@ -225,3 +230,4 @@ export default function ShiftCalendarPage() {
     </div>
   );
 }
+
