@@ -26,7 +26,7 @@ export function OrgSidebar() {
   ];
 
   return (
-    <aside className="w-64 flex-shrink-0 border-r border-stone-200 bg-[#f7f3f0] flex flex-col">
+    <aside className="w-64 h-screen overflow-y-auto flex-shrink-0 border-r border-stone-200 bg-[#f7f3f0] flex flex-col">
       <div className="p-6">
         <div className="flex items-center gap-2.5">
           <div className="bg-primary p-2 rounded-xl flex items-center justify-center">

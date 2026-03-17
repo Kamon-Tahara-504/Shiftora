@@ -6,10 +6,10 @@ import { CheckCircle2, History, Info, TrendingUp, Users, Zap } from "lucide-reac
 
 export default function ShiftGeneratePage() {
   return (
-    <div className="bg-background-light font-display text-slate-900 antialiased min-h-screen flex">
+    <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
       <OrgSidebar />
 
-      <main className="flex-1 overflow-y-auto bg-background-light p-8">
+      <main className="flex-1 h-screen overflow-y-auto bg-background-light p-8">
         <div className="max-w-6xl mx-auto w-full">
           <OrgPageHeader
             title="シフト生成"

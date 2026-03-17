@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, CalendarPlus } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
+import { OrgPageHeader } from "@/components/org/OrgPageHeader";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -62,74 +63,71 @@ export default function ShiftCalendarPage() {
 
   return (
     <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
-      <div className="h-screen overflow-y-auto">
-        <OrgSidebar />
-      </div>
+      <OrgSidebar />
 
       <main className="flex-1 h-screen overflow-y-auto bg-background-light p-8">
         <div className="max-w-6xl mx-auto w-full">
-          {/* ページヘッダー（タイトル＋凡例＋ツールバー） */}
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
-            <div>
-              <h2 className="text-3xl font-black tracking-tight mb-2">
-                シフトカレンダー
-              </h2>
-              <div className="flex items-center gap-4 text-slate-500 text-sm">
+          <OrgPageHeader
+            title="シフトカレンダー"
+            description={
+              <div className="flex items-center gap-4 text-slate-500 text-xs md:text-sm mt-1">
                 <div className="flex items-center gap-2">
-                  <span className="size-3 rounded-full bg-primary" />
+                  <span className="size-2 md:size-3 rounded-full bg-primary" />
                   <span>デイサービス</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="size-3 rounded-full bg-purple-500" />
+                  <span className="size-2 md:size-3 rounded-full bg-purple-500" />
                   <span>訪問介護</span>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex bg-white rounded-lg border border-slate-200 p-1">
+            }
+            actions={
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex bg-white rounded-lg border border-slate-200 p-1">
+                  <button
+                    type="button"
+                    className="px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md hover:bg-slate-50"
+                  >
+                    日
+                  </button>
+                  <button
+                    type="button"
+                    className="px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md hover:bg-slate-50"
+                  >
+                    週
+                  </button>
+                </div>
+                <div className="flex items-center bg-white rounded-lg border border-slate-200 px-3 py-1.5 gap-4">
+                  <button
+                    type="button"
+                    onClick={goPrevMonth}
+                    className="p-1 hover:text-primary transition-colors"
+                    aria-label="前月"
+                  >
+                    <ChevronLeft className="size-4 md:size-5" />
+                  </button>
+                  <span className="text-xs md:text-sm font-bold min-w-[100px] md:min-w-[120px] text-center">
+                    {monthLabel}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={goNextMonth}
+                    className="p-1 hover:text-primary transition-colors"
+                    aria-label="翌月"
+                  >
+                    <ChevronRight className="size-4 md:size-5" />
+                  </button>
+                </div>
                 <button
                   type="button"
-                  className="px-4 py-1.5 text-sm font-medium rounded-md hover:bg-slate-50"
+                  className="inline-flex items-center justify-center gap-2 px-4 md:px-5 py-2 md:py-2.5 bg-primary text-white text-xs md:text-sm font-bold rounded-lg hover:bg-primary/90 shadow-sm shadow-primary/20"
                 >
-                  日
-                </button>
-                <button
-                  type="button"
-                  className="px-4 py-1.5 text-sm font-medium rounded-md hover:bg-slate-50"
-                >
-                  週
+                  <CalendarPlus className="size-4 md:size-5" />
+                  <span>シフトを追加</span>
                 </button>
               </div>
-              <div className="flex items-center bg-white rounded-lg border border-slate-200 px-3 py-1.5 gap-4">
-                <button
-                  type="button"
-                  onClick={goPrevMonth}
-                  className="p-1 hover:text-primary transition-colors"
-                  aria-label="前月"
-                >
-                  <ChevronLeft className="size-5" />
-                </button>
-                <span className="text-sm font-bold min-w-[120px] text-center">
-                  {monthLabel}
-                </span>
-                <button
-                  type="button"
-                  onClick={goNextMonth}
-                  className="p-1 hover:text-primary transition-colors"
-                  aria-label="翌月"
-                >
-                  <ChevronRight className="size-5" />
-                </button>
-              </div>
-              <button
-                type="button"
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 shadow-sm shadow-primary/20"
-              >
-                <CalendarPlus className="size-5" />
-                <span>シフトを追加</span>
-              </button>
-            </div>
-          </div>
+            }
+          />
 
           {/* カレンダーグリッド */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
