@@ -1,6 +1,6 @@
  "use client";
 
-import { CalendarDays, Users, Sparkles, CalendarCheck, User } from "lucide-react";
+import { CalendarDays, Users, Sparkles, CalendarCheck, User, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -66,7 +66,7 @@ export function OrgSidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-slate-200">
+      <div className="p-4 border-t border-slate-200 space-y-3">
         <div className="flex items-center gap-3 px-2">
           <div className="size-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
             <User className="text-primary size-5" />
@@ -78,6 +78,13 @@ export function OrgSidebar() {
             </p>
           </div>
         </div>
+        <button
+          type="button"
+          className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+        >
+          <LogOut className="size-4" />
+          <span>ログアウト</span>
+        </button>
       </div>
     </aside>
   );
