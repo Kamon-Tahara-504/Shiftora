@@ -5,8 +5,7 @@ import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { EmployeeCreateModal } from "@/components/org/EmployeeCreateModal";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
-
-type EmployeeStatus = "active" | "inactive";
+import { useEmployees, type EmployeeStatus } from "@/hooks/useEmployees";
 
 type Employee = {
   id: string;
@@ -16,40 +15,6 @@ type Employee = {
   avatarUrl: string;
 };
 
-const employees: Employee[] = [
-  {
-    id: "alice",
-    name: "Alice Johnson",
-    department: "デイサービス",
-    status: "active",
-    avatarUrl:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuC6QlmoCvogrojkuFsVc3bAtkJ7phPkec3OWjlByKOH26syFOWdzlHvndvh7jvkzsZXeYXX3vPWkKnRnIcHMs-BrRZ8n0RBO-7Q-ucrA9yVlu1bAGV56jpX6evcJzdOGV-x3msKAOMM-_H5wr8yIEWwYZhxM_ALDWJcKmRtHBVVdzvNSczEwr1-4ipwMS7AE4croIUzwuLdNUUh7FtRl0eftGsRvCjvxOn-uoo7CAQhcHhh4DNGA-yAolQ63ZT3gIrogdOeK0NUa04w",
-  },
-  {
-    id: "bob",
-    name: "Bob Smith",
-    department: "訪問介護",
-    status: "active",
-    avatarUrl:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuAPY4dggfxyRJXXM-_O9VtBRn_pEkfr6Mqa7sK_h3X9878YBZeEo1Fof6ESuYi-wDqDgXHDLTpBIL2jLzUNLQpOAuYKMHVy49Hj1UfNWE78-Fbe8I9rO1yP0_Iqo5FEKAzf2IloyEzcGb53iagxbZ9hR3-J_UvKx6pJPEkXglXIHV3vsqVaflseCvYAjVUU1vGgIsQnexBiche1yeqLRjJQ16IBh5jp-arnTPjSHUtJc-Gjzvtg8mfOBYXlvrbA-RyM1erTT7QRK2tF",
-  },
-  {
-    id: "charlie",
-    name: "Charlie Brown",
-    department: "デイサービス",
-    status: "inactive",
-    avatarUrl:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCu7KYFzr1OWxeD1hAnwBpR3HjOr-TpgNxSSxdAPP6kqWTYlMjFXM0WLcfi82bnnaDcPhaetsgb2zF2JUkkV2Soia-tj29IRO6JO6pX6NYAkAK2eqSymrjchOf1pwQVlROVVPbseNjqEHAmoZMnq6ALrNCZGd7AF-V8ADXM_58oA1RcW4YES9DtI3nijBzXUnngGVp7mP6-A9Fi4Lm92tKm5salbgPhaPjLUDqOgOuADH7HAb_Flec_szAM7dq3SSkIWRCCg9aexk-0",
-  },
-  {
-    id: "diana",
-    name: "Diana Prince",
-    department: "訪問介護",
-    status: "active",
-    avatarUrl:
-      "https://lh3.googleusercontent.com/aida-public/AB6AXuCKu-Y5ff1GEeqgomtd88h7XMFeMjP1EXN24d3nANGvQ4aZr6y-yxAFfRjfZAC3hkCBt-minqC_n03-4lWN4y29GLpsfFF1Tc1SSdQGS2gIi_mMTEVBQYU2slrEpD6XWtqAJ8cKIZ_N2OyMBtnVqe8VFSq9Aq4noNV9wDKvQ3EOZhriYlKvEbsD0Nm_3MyQDcUKX0tVasu3PyA2lrbldZhMQzlyThLu-Ey-9HS809974n6FzCvd7Nq1KpfuFGMHL0ix2VwHkeTTjxrc",
-  },
-];
 
 function DepartmentBadge({ department }: { department: Employee["department"] }) {
   const isDayService = department === "デイサービス";
@@ -92,17 +57,17 @@ function StatusBadge({ status }: { status: EmployeeStatus }) {
 export default function EmployeesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [rows, setRows] = useState<Employee[]>(employees);
+  const { employees, isLoading, error, addEmployee, patchEmployee, refresh } = useEmployees();
 
   const pageSize = 10;
   const [currentPage, setCurrentPage] = useState(1);
 
-  const totalCount = rows.length;
+  const totalCount = employees.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const clampedCurrentPage = Math.min(currentPage, totalPages);
   const startIndex = (clampedCurrentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
-  const paginatedRows = rows.slice(startIndex, endIndex);
+  const paginatedRows = employees.slice(startIndex, endIndex);
 
   return (
     <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
@@ -147,6 +112,11 @@ export default function EmployeesPage() {
           </div>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            {error ? (
+              <div className="mx-6 mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {error}
+              </div>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -166,42 +136,62 @@ export default function EmployeesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedRows.map((employee) => (
-                    <tr
-                      key={employee.id}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="size-9 rounded-full bg-slate-200 overflow-hidden">
-                            <img
-                              src={employee.avatarUrl}
-                              alt={employee.name}
-                              className="w-full h-full object-cover"
-                            />
-                          </div>
-                          <span className="font-semibold text-sm">
-                            {employee.name}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <DepartmentBadge department={employee.department} />
-                      </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={employee.status} />
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          type="button"
-                          onClick={() => setEditingEmployee(employee)}
-                          className="text-primary hover:underline text-xs font-bold uppercase tracking-tight"
-                        >
-                          編集
-                        </button>
+                  {isLoading ? (
+                    <tr>
+                      <td
+                        className="px-6 py-8 text-sm text-slate-500 text-center"
+                        colSpan={4}
+                      >
+                        職員データを読み込み中です...
                       </td>
                     </tr>
-                  ))}
+                  ) : paginatedRows.length === 0 ? (
+                    <tr>
+                      <td
+                        className="px-6 py-8 text-sm text-slate-500 text-center"
+                        colSpan={4}
+                      >
+                        表示する職員がまだいません。
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedRows.map((employee) => (
+                      <tr
+                        key={employee.id}
+                        className="hover:bg-slate-50 transition-colors"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="size-9 rounded-full bg-slate-200 overflow-hidden">
+                              <img
+                                src={employee.avatarUrl}
+                                alt={employee.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <span className="font-semibold text-sm">
+                              {employee.name}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <DepartmentBadge department={employee.department} />
+                        </td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={employee.status} />
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => setEditingEmployee(employee)}
+                            className="text-primary hover:underline text-xs font-bold uppercase tracking-tight"
+                          >
+                            編集
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -261,18 +251,17 @@ export default function EmployeesPage() {
         open={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         mode="create"
-        onSubmit={(values) => {
-          // 本実装では API 連携などに置き換える想定
-          const newEmployee: Employee = {
-            id: crypto.randomUUID(),
-            name: values.name,
-            department: values.department,
-            status: values.status,
-            avatarUrl:
-              "https://lh3.googleusercontent.com/aida-public/AB6AXuC6QlmoCvogrojkuFsVc3bAtkJ7phPkec3OWjlByKOH26syFOWdzlHvndvh7jvkzsZXeYXX3vPWkKnRnIcHMs-BrRZ8n0RBO-7Q-ucrA9yVlu1bAGV56jpX6evcJzdOGV-x3msKAOMM-_H5wr8yIEWwYZhxM_ALDWJcKmRtHBVVdzvNSczEwr1-4ipwMS7AE4croIUzwuLdNUUh7FtRl0eftGsRvCjvxOn-uoo7CAQhcHhh4DNGA-yAolQ63ZT3gIrogdOeK0NUa04w",
-          };
-          setRows((prev) => [...prev, newEmployee]);
-          setIsCreateModalOpen(false);
+        onSubmit={async (values) => {
+          try {
+            await addEmployee({
+              name: values.name,
+              department: values.department,
+              status: values.status,
+            });
+            setIsCreateModalOpen(false);
+          } catch {
+            await refresh();
+          }
         }}
       />
       <EmployeeCreateModal
@@ -291,19 +280,16 @@ export default function EmployeesPage() {
         }
         onSubmit={(values) => {
           if (!editingEmployee) return;
-          setRows((prev) =>
-            prev.map((emp) =>
-              emp.id === editingEmployee.id
-                ? {
-                    ...emp,
-                    name: values.name,
-                    department: values.department,
-                    status: values.status,
-                  }
-                : emp,
-            ),
-          );
-          setEditingEmployee(null);
+          patchEmployee(editingEmployee.id, {
+            name: values.name,
+            department: values.department,
+            status: values.status,
+          })
+            .then(() => setEditingEmployee(null))
+            .catch(async () => {
+              await refresh();
+              setEditingEmployee(null);
+            });
         }}
       />
     </div>
