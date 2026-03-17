@@ -3,7 +3,6 @@
 import {
   CalendarDays,
   CalendarCheck,
-  Home,
   PlaneTakeoff,
   LogOut,
   Settings,
@@ -27,7 +26,6 @@ export function StaffSidebar({
   const navItems = [
     { href: "/my-shifts", label: "自分のシフト", Icon: CalendarCheck },
     { href: "/day-offs", label: "希望休", Icon: PlaneTakeoff },
-    { href: "/", label: "ホーム", Icon: Home },
   ];
 
   return (
