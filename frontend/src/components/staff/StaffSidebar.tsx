@@ -5,23 +5,15 @@ import {
   CalendarCheck,
   PlaneTakeoff,
   LogOut,
-  Settings,
-  Sparkles,
   User,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
-type StaffSidebarProps = {
-  userName?: string;
-  roleLabel?: string;
-};
-
-export function StaffSidebar({
-  userName = "田中 太郎",
-  roleLabel = "介護スタッフ",
-}: StaffSidebarProps) {
+export function StaffSidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   const navItems = [
     { href: "/my-shifts", label: "自分のシフト", Icon: CalendarCheck },
@@ -71,19 +63,13 @@ export function StaffSidebar({
             <User className="text-primary size-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold truncate">{userName}</p>
-            <p className="text-[10px] text-slate-500 truncate">{roleLabel}</p>
+            <p className="text-xs font-semibold truncate">{user?.email || "スタッフユーザー"}</p>
+            <p className="text-[10px] text-slate-500 truncate">スタッフ</p>
           </div>
         </div>
         <button
           type="button"
-          className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/10 transition-colors"
-        >
-          <Sparkles className="size-4" />
-          <span>シフト申請</span>
-        </button>
-        <button
-          type="button"
+          onClick={() => logout()}
           className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
         >
           <LogOut className="size-4" />
