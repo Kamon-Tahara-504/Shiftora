@@ -1,28 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
-  Bell,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
   Info,
-  Users,
 } from "lucide-react";
 import { StaffSidebar } from "@/components/staff/StaffSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
+import { useMyShifts } from "@/hooks/useMyShifts";
+import { type ShiftAssignment } from "@/services/shiftService";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
-
-type ShiftKind = "day" | "visit";
-type ShiftSlot = "AM" | "PM";
-
-type ShiftEvent = {
-  slot: ShiftSlot;
-  kind: ShiftKind;
-};
-
-type ShiftMap = Record<string, ShiftEvent[]>;
 
 type CalendarCell = {
   key: string;
@@ -30,6 +20,7 @@ type CalendarCell = {
   month: number;
   year: number;
   isCurrentMonth: boolean;
+  dateString: string;
 };
 
 function getMonthCells(year: number, month: number): CalendarCell[] {
@@ -43,58 +34,61 @@ function getMonthCells(year: number, month: number): CalendarCell[] {
     const cellYear = dateObj.getFullYear();
     const cellMonth = dateObj.getMonth() + 1;
     const cellDate = dateObj.getDate();
+    const y = cellYear;
+    const m = String(cellMonth).padStart(2, "0");
+    const d = String(cellDate).padStart(2, "0");
     cells.push({
       key: `${cellYear}-${cellMonth}-${cellDate}-${i}`,
       date: cellDate,
       month: cellMonth,
       year: cellYear,
       isCurrentMonth: cellMonth === month,
+      dateString: `${y}-${m}-${d}`,
     });
   }
 
   return cells;
 }
 
-const SHIFT_EVENTS: ShiftMap = {
-  "2023-10-4": [
-    { slot: "AM", kind: "day" },
-    { slot: "PM", kind: "visit" },
-  ],
-  "2023-10-5": [{ slot: "AM", kind: "day" }],
-  "2023-10-6": [{ slot: "PM", kind: "visit" }],
-  "2023-10-8": [{ slot: "AM", kind: "day" }],
-  "2023-10-13": [
-    { slot: "AM", kind: "day" },
-    { slot: "PM", kind: "visit" },
-  ],
-};
-
-function getEvents(year: number, month: number, date: number): ShiftEvent[] {
-  return SHIFT_EVENTS[`${year}-${month}-${date}`] ?? [];
-}
-
-function EventBadge({ event }: { event: ShiftEvent }) {
-  const isDay = event.kind === "day";
-  const label = isDay ? "デイ" : "訪問";
-  const className = isDay
-    ? "bg-primary/10 text-primary"
-    : "bg-orange-600/10 text-orange-600";
+function EventBadge({ event }: { event: ShiftAssignment }) {
+  const isDaycare = event.department === "daycare";
+  const label = isDaycare ? "デイ" : "訪問";
+  const className = isDaycare
+    ? "bg-primary/10 text-primary border-primary/20"
+    : "bg-purple-50 text-purple-600 border-purple-100";
 
   return (
-    <div className={`text-[10px] p-1 rounded font-bold leading-tight ${className}`}>
+    <div className={`text-[10px] p-1 rounded font-bold leading-tight border ${className}`}>
       {event.slot}: {label}
     </div>
   );
 }
 
 export default function MyShiftsPage() {
-  const [year, setYear] = useState(2023);
-  const [month, setMonth] = useState(10);
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
+  const { shifts, fetchMyShifts } = useMyShifts();
+
+  useEffect(() => {
+    fetchMyShifts(year, month);
+  }, [year, month, fetchMyShifts]);
 
   const cells = useMemo(() => getMonthCells(year, month), [year, month]);
   const monthLabel = `${year}年 ${month}月`;
 
-  const todayKey = "2023-10-13";
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const shiftsByDate = useMemo(() => {
+    const map: Record<string, ShiftAssignment[]> = {};
+    shifts.forEach((s) => {
+      if (!map[s.date]) map[s.date] = [];
+      map[s.date].push(s);
+    });
+    return map;
+  }, [shifts]);
+
+  const todayShifts = useMemo(() => shiftsByDate[todayStr] || [], [shiftsByDate, todayStr]);
 
   const goPrev = () => {
     if (month === 1) {
@@ -115,15 +109,13 @@ export default function MyShiftsPage() {
   };
 
   const goToday = () => {
-    setYear(2023);
-    setMonth(10);
+    setYear(today.getFullYear());
+    setMonth(today.getMonth() + 1);
   };
 
   return (
     <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
-      <div className="h-screen overflow-y-auto">
-        <StaffSidebar />
-      </div>
+      <StaffSidebar />
 
       <main className="flex-1 h-screen overflow-y-auto bg-background-light p-8">
         <div className="max-w-6xl mx-auto w-full">
@@ -184,9 +176,8 @@ export default function MyShiftsPage() {
                   ))}
 
                   {cells.map((cell) => {
-                    const key = `${cell.year}-${cell.month}-${cell.date}`;
-                    const events = getEvents(cell.year, cell.month, cell.date);
-                    const isToday = key === todayKey;
+                    const dateShifts = shiftsByDate[cell.dateString] || [];
+                    const isToday = cell.dateString === todayStr;
 
                     return (
                       <div
@@ -199,8 +190,8 @@ export default function MyShiftsPage() {
                           {cell.date}
                           {isToday ? " (今日)" : ""}
                         </span>
-                        {events.map((event, idx) => (
-                          <EventBadge key={`${key}-${idx}`} event={event} />
+                        {dateShifts.map((s) => (
+                          <EventBadge key={s.id} event={s} />
                         ))}
                       </div>
                     );
@@ -208,14 +199,10 @@ export default function MyShiftsPage() {
                 </div>
               </section>
 
-              <section className="grid grid-cols-2 gap-4">
+              <section className="grid grid-cols-1 gap-4">
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <p className="text-slate-500 text-xs font-bold mb-1">今月の総勤務日数</p>
-                  <p className="text-2xl font-bold text-primary">22 日</p>
-                </div>
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <p className="text-slate-500 text-xs font-bold mb-1">今月の稼働時間（見込）</p>
-                  <p className="text-2xl font-bold text-primary">168.5 h</p>
+                  <p className="text-slate-500 text-xs font-bold mb-1">今月の勤務日数</p>
+                  <h4 className="text-2xl font-bold text-primary">{shifts.length} 日</h4>
                 </div>
               </section>
             </div>
@@ -224,61 +211,28 @@ export default function MyShiftsPage() {
               <section className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
                 <div className="bg-primary px-4 py-3 flex items-center justify-between">
                   <h3 className="text-white font-bold">本日の詳細</h3>
-                  <span className="text-white/80 text-xs">10月13日 (金)</span>
+                  <span className="text-white/80 text-xs">{today.getMonth() + 1}月{today.getDate()}日 ({WEEKDAYS[today.getDay()]})</span>
                 </div>
                 <div className="p-4 space-y-6">
-                  <div className="relative pl-6 border-l-2 border-primary">
-                    <div className="absolute -left-1.5 top-0 size-3 rounded-full bg-primary ring-4 ring-white" />
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold bg-primary/20 text-primary px-2 py-0.5 rounded">
-                        AM
-                      </span>
-                      <span className="text-sm font-bold">09:00 - 13:00</span>
-                    </div>
-                    <h4 className="font-bold mb-1">デイサービス勤務</h4>
-                    <p className="text-xs text-slate-500 mb-3">担当: フロアA（レクリエーション）</p>
-                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 text-xs">
-                      <p className="font-bold mb-1 flex items-center gap-1 text-slate-700">
-                        <Users className="size-3.5" />
-                        主な利用者
-                      </p>
-                      <p className="text-slate-600">佐藤 様 / 山田 様 / 田中 様</p>
-                    </div>
-                  </div>
-
-                  <div className="relative pl-6 border-l-2 border-orange-600">
-                    <div className="absolute -left-1.5 top-0 size-3 rounded-full bg-orange-600 ring-4 ring-white" />
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold bg-orange-600/20 text-orange-600 px-2 py-0.5 rounded">
-                        PM
-                      </span>
-                      <span className="text-sm font-bold">14:00 - 18:00</span>
-                    </div>
-                    <h4 className="font-bold mb-1">訪問介護 (Home Care)</h4>
-                    <p className="text-xs text-slate-500 mb-3">移動: 自転車 / 3件</p>
-                    <ul className="space-y-2">
-                      <li className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-xs">
-                        <span className="text-slate-600">14:30 鈴木 様 (身体)</span>
-                        <ChevronRight className="size-4 text-slate-400" />
-                      </li>
-                      <li className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-xs">
-                        <span className="text-slate-600">16:00 高橋 様 (生活)</span>
-                        <ChevronRight className="size-4 text-slate-400" />
-                      </li>
-                      <li className="flex items-center justify-between p-2 bg-slate-50 rounded-lg text-xs">
-                        <span className="text-slate-600">17:15 伊藤 様 (身体)</span>
-                        <ChevronRight className="size-4 text-slate-400" />
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-                <div className="p-4 bg-slate-50 border-t border-slate-100">
-                  <button
-                    type="button"
-                    className="w-full bg-white border border-slate-200 text-slate-700 py-2 rounded-lg text-sm font-bold hover:bg-slate-50 transition-colors shadow-sm"
-                  >
-                    本日の業務日報を作成
-                  </button>
+                  {todayShifts.length === 0 ? (
+                    <p className="text-sm text-slate-500 text-center py-8">本日の勤務はありません。</p>
+                  ) : (
+                    todayShifts.map((s) => {
+                      const isDaycare = s.department === "daycare";
+                      return (
+                        <div key={s.id} className={`relative pl-6 border-l-2 ${isDaycare ? "border-primary" : "border-purple-500"}`}>
+                          <div className={`absolute -left-1.5 top-0 size-3 rounded-full ring-4 ring-white ${isDaycare ? "bg-primary" : "bg-purple-500"}`} />
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`text-xs font-bold px-2 py-0.5 rounded ${isDaycare ? "bg-primary/20 text-primary" : "bg-purple-100 text-purple-600"}`}>
+                              {s.slot}
+                            </span>
+                          </div>
+                          <h4 className="font-bold mb-1">{isDaycare ? "デイサービス勤務" : "訪問介護 (Home Care)"}</h4>
+                          <p className="text-xs text-slate-500 mb-3">{isDaycare ? "担当: フロア未定" : "担当利用者: 未定"}</p>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
               </section>
 
@@ -288,13 +242,8 @@ export default function MyShiftsPage() {
                   連絡事項
                 </h3>
                 <div className="space-y-3">
-                  <div className="p-2 bg-red-50 border-l-4 border-red-500 rounded text-xs">
-                    <p className="font-bold text-red-600">シフト変更あり</p>
-                    <p className="text-slate-600">10月20日のPMが変更になりました。</p>
-                  </div>
                   <div className="p-2 bg-blue-50 border-l-4 border-blue-500 rounded text-xs">
-                    <p className="font-bold text-blue-600">全体研修</p>
-                    <p className="text-slate-600">10月25日 18:30〜 Web研修あり</p>
+                    <p className="text-slate-600">連絡事項は現在ありません。</p>
                   </div>
                 </div>
               </section>
@@ -305,3 +254,4 @@ export default function MyShiftsPage() {
     </div>
   );
 }
+

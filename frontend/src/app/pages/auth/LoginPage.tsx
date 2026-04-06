@@ -1,8 +1,43 @@
+"use client";
+
+import { useState } from "react";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AuthAppHeader } from "@/components/auth/AuthAppHeader";
+import { ApiError } from "@/lib/api";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { login } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      const me = await login({ email: email.trim(), password });
+      if (me.role === "org_admin") {
+        router.push("/employees");
+        return;
+      }
+      router.push("/my-shifts");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError("ログインに失敗しました。しばらくしてから再度お試しください。");
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <div className="bg-background-light font-display text-slate-900 min-h-screen flex flex-col">
       <AuthAppHeader />
@@ -20,7 +55,7 @@ export default function LoginPage() {
                 </p>
               </div>
 
-              <form action="#" className="space-y-6">
+              <form className="space-y-6" onSubmit={handleSubmit}>
                 <div className="space-y-2">
                   <label
                     className="block text-sm font-semibold text-slate-700 ml-1"
@@ -36,6 +71,9 @@ export default function LoginPage() {
                       name="email"
                       placeholder="admin@example.com"
                       type="email"
+                      required
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
                     />
                   </div>
                 </div>
@@ -63,15 +101,25 @@ export default function LoginPage() {
                       name="password"
                       placeholder="パスワードを入力"
                       type="password"
+                      required
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
                     />
                   </div>
                 </div>
 
+                {error ? (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {error}
+                  </p>
+                ) : null}
+
                 <button
                   className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-primary/20 mt-4 flex items-center justify-center gap-2"
                   type="submit"
+                  disabled={isSubmitting}
                 >
-                  ログイン
+                  {isSubmitting ? "ログイン中..." : "ログイン"}
                   <ArrowRight className="w-5 h-5" />
                 </button>
               </form>

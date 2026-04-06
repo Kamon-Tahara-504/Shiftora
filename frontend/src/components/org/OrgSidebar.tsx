@@ -3,9 +3,11 @@
 import { CalendarDays, Users, Sparkles, CalendarCheck, User, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
 export function OrgSidebar() {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
 
   const navItems = [
     {
@@ -72,14 +74,15 @@ export function OrgSidebar() {
             <User className="text-primary size-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold truncate">管理者ユーザー</p>
+            <p className="text-xs font-semibold truncate">{user?.email || "管理者ユーザー"}</p>
             <p className="text-[10px] text-slate-500 truncate">
-              admin@shiftora.io
+              {user?.role === "org_admin" ? "組織管理者" : "ユーザー"}
             </p>
           </div>
         </div>
         <button
           type="button"
+          onClick={() => logout()}
           className="w-full inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
         >
           <LogOut className="size-4" />
