@@ -16,7 +16,7 @@ from app.auth.constants import (
     CODE_SUBSCRIPTION_INACTIVE,
 )
 from app.auth.deps import CurrentUser
-from app.auth.rbac import require_org_admin
+from app.auth.rbac import require_org_admin, require_organization_id
 from app.config import get_settings
 from app.org.employees import (
     create_employee,
@@ -146,16 +146,6 @@ class EmployeeUpdateBody(BaseModel):
     is_active: bool | None = None
 
 
-def _require_org_id(current_user: CurrentUser) -> str:
-    """org_admin の organization_id を返す。無ければ 403。"""
-    if not current_user.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=_error_detail(CODE_FORBIDDEN, "Insufficient permissions"),
-        )
-    return current_user.organization_id
-
-
 def _employee_to_response(e: dict[str, Any]) -> dict[str, Any]:
     """DB の employee 行を API レスポンス用の辞書に変換する。"""
     return {
@@ -181,7 +171,7 @@ def employees_list(
     GET /org/employees（org_admin のみ）
     デフォルトは is_active が true の職員のみ。?include_inactive=true で無効も含む。
     """
-    org_id = _require_org_id(current_user)
+    org_id = require_organization_id(current_user)
     items = list_employees(org_id, include_inactive=include_inactive)
     return [_employee_to_response(e) for e in items]
 
@@ -197,7 +187,7 @@ def employees_create(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
         )
-    org_id = _require_org_id(current_user)
+    org_id = require_organization_id(current_user)
     emp = create_employee(
         org_id,
         body.name,
@@ -233,7 +223,7 @@ def employees_update(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
         )
-    org_id = _require_org_id(current_user)
+    org_id = require_organization_id(current_user)
     updates = body.model_dump(exclude_unset=True)
     emp = update_employee(org_id, employee_id, **updates)
     if emp is None:
@@ -267,7 +257,7 @@ def shifts_generate(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
         )
-    org_id = _require_org_id(current_user)
+    org_id = require_organization_id(current_user)
     today = date.today()
     if (body.year, body.month) < (today.year, today.month):
         raise HTTPException(
@@ -348,7 +338,7 @@ def shifts_list(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
         )
-    org_id = _require_org_id(current_user)
+    org_id = require_organization_id(current_user)
     rows = list_shifts(org_id, year, month)
     return [_shift_to_response(r) for r in rows]
 
@@ -375,7 +365,7 @@ def shifts_patch(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
         )
-    org_id = _require_org_id(current_user)
+    org_id = require_organization_id(current_user)
     updates = body.model_dump(exclude_unset=True)
     if not updates:
         # 何も更新しない場合は現状を返す

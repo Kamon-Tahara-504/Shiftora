@@ -1,4 +1,5 @@
 """認証 API: login / refresh / logout。設計: docs/05-auth-and-invitation.md, docs/08-api.md."""
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -16,25 +17,57 @@ from app.auth.constants import (
 )
 from app.auth.deps import CurrentUser, get_current_user
 from app.audit.service import (
+    EVENT_AUTH_LOGIN_FAILED,
+    EVENT_AUTH_LOGIN_SUCCEEDED,
+    EVENT_AUTH_LOGOUT,
+    EVENT_AUTH_REFRESH_FAILED,
+    EVENT_AUTH_REFRESH_SUCCEEDED,
+    EVENT_AUTH_REGISTER_ORG_FAILED,
+    EVENT_AUTH_REGISTER_ORG_SUCCEEDED,
+    EVENT_AUTH_SIGNUP_FAILED,
+    EVENT_AUTH_SIGNUP_SUCCEEDED,
     EVENT_USER_ROLE_CHANGED,
     append as audit_append,
 )
 from app.auth.service import (
     build_token_response,
+    get_user_by_email,
     login as do_login,
     logout as do_logout,
     refresh_tokens,
     register_org as do_register_org,
     signup as do_signup,
 )
+from app.auth.jwt import decode_token
 from app.config import get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+logger = logging.getLogger(__name__)
 
 
 def _error_detail(code: str, message: str) -> dict:
     """docs/08-api.md のエラー形式 { code, message, details } を返す。"""
     return {"code": code, "message": message, "details": {}}
+
+
+def _mask_email(email: str) -> str:
+    value = (email or "").strip().lower()
+    if "@" not in value:
+        return "***"
+    local, domain = value.split("@", 1)
+    if len(local) <= 2:
+        masked_local = f"{local[:1]}***"
+    else:
+        masked_local = f"{local[:1]}***{local[-1:]}"
+    return f"{masked_local}@{domain}"
+
+
+def _log_auth_failure(event_type: str, metadata: dict | None = None) -> None:
+    logger.warning(
+        "auth_failure event=%s metadata=%s",
+        event_type,
+        metadata or {},
+    )
 
 
 def _require_jwt_configured() -> None:
@@ -103,15 +136,29 @@ def login(body: LoginRequest):
     email = (body.email or "").strip()
     password = body.password or ""
     if not email or not password:
+        _log_auth_failure(EVENT_AUTH_LOGIN_FAILED, {"reason": "validation_failed"})
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(CODE_VALIDATION_ERROR, "email and password are required"),
+            detail=_error_detail(CODE_VALIDATION_ERROR, "Invalid request"),
         )
     result = do_login(email, password)
     if not result:
+        _log_auth_failure(
+            EVENT_AUTH_LOGIN_FAILED,
+            {"reason": "invalid_credentials", "email_masked": _mask_email(email)},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_error_detail(CODE_INVALID_CREDENTIALS, "Invalid email or password"),
+            detail=_error_detail(CODE_INVALID_CREDENTIALS, "Authentication failed"),
+        )
+    # do_login は tokens のみ返すため、監査ログ用にユーザーを再取得する。
+    found = get_user_by_email(email.strip().lower())
+    if found and found.get("organization_id") and found.get("id"):
+        audit_append(
+            str(found["organization_id"]),
+            str(found["id"]),
+            EVENT_AUTH_LOGIN_SUCCEEDED,
+            {"email_masked": _mask_email(email)},
         )
     return result
 
@@ -126,15 +173,25 @@ def refresh(body: RefreshRequest):
     _require_jwt_configured()
     refresh_token = (body.refresh_token or "").strip()
     if not refresh_token:
+        _log_auth_failure(EVENT_AUTH_REFRESH_FAILED, {"reason": "validation_failed"})
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(CODE_VALIDATION_ERROR, "refresh_token is required"),
+            detail=_error_detail(CODE_VALIDATION_ERROR, "Invalid request"),
         )
     result = refresh_tokens(refresh_token)
     if not result:
+        _log_auth_failure(EVENT_AUTH_REFRESH_FAILED, {"reason": "invalid_token"})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_error_detail(CODE_INVALID_TOKEN, "Invalid or expired refresh token"),
+            detail=_error_detail(CODE_INVALID_TOKEN, "Authentication failed"),
+        )
+    payload = decode_token(result["access_token"])
+    if payload and payload.get("org_id") and payload.get("sub"):
+        audit_append(
+            str(payload["org_id"]),
+            str(payload["sub"]),
+            EVENT_AUTH_REFRESH_SUCCEEDED,
+            {},
         )
     return result
 
@@ -147,6 +204,13 @@ def logout(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     token_version を +1 してトークン失効。
     """
     do_logout(current_user.id)
+    if current_user.organization_id:
+        audit_append(
+            current_user.organization_id,
+            current_user.id,
+            EVENT_AUTH_LOGOUT,
+            {},
+        )
     return {"status": "ok"}
 
 
@@ -163,15 +227,21 @@ def register_org(body: RegisterOrgRequest):
         password=body.password,
     )
     if user is None:
+        _log_auth_failure(
+            EVENT_AUTH_REGISTER_ORG_FAILED,
+            {"reason": "register_failed", "email_masked": _mask_email(body.admin_email)},
+        )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={
-                "code": CODE_EMAIL_ALREADY_REGISTERED,
-                "message": "This email is already registered",
-                "details": {"admin_email": body.admin_email},
-            },
+            detail=_error_detail(CODE_EMAIL_ALREADY_REGISTERED, "Registration failed"),
         )
     tokens = build_token_response(user)
+    audit_append(
+        str(user["organization_id"]),
+        str(user["id"]),
+        EVENT_AUTH_REGISTER_ORG_SUCCEEDED,
+        {"email_masked": _mask_email(body.admin_email)},
+    )
     return {
         "organization_id": str(user["organization_id"]),
         "user_id": str(user["id"]),
@@ -191,12 +261,13 @@ def signup(body: SignupRequest):
     _require_auth_configured()
     user, error_code = do_signup(token=body.token.strip(), password=body.password)
     if user is None:
+        _log_auth_failure(EVENT_AUTH_SIGNUP_FAILED, {"reason": error_code or "signup_failed"})
         if error_code == "max_users_exceeded":
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=_error_detail(
                     CODE_MAX_USERS_EXCEEDED,
-                    "Cannot sign up: organization user limit reached",
+                    "Signup failed",
                 ),
             )
         if error_code == "subscription_inactive":
@@ -204,16 +275,22 @@ def signup(body: SignupRequest):
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=_error_detail(
                     CODE_SUBSCRIPTION_INACTIVE,
-                    "Cannot sign up: subscription is not active",
+                    "Signup failed",
                 ),
             )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(
                 CODE_INVALID_INVITATION,
-                "Invalid, expired, or already used invitation token",
+                "Signup failed",
             ),
         )
+    audit_append(
+        str(user["organization_id"]),
+        str(user["id"]),
+        EVENT_AUTH_SIGNUP_SUCCEEDED,
+        {"role": user.get("role", "staff")},
+    )
     audit_append(
         str(user["organization_id"]),
         str(user["id"]),

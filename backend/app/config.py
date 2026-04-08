@@ -22,6 +22,11 @@ class Settings(BaseSettings):
 
     # CORS（フロント開発用。環境変数 CORS_ORIGINS をカンマ区切りで指定）
     cors_origins: str = ""
+    app_env: str = "development"
+
+    # Rate limit（Phase 2）
+    auth_rate_limit_window_seconds: int = 60
+    auth_rate_limit_max_requests: int = 10
 
     def supabase_configured(self) -> bool:
         return bool(self.supabase_url and self.supabase_service_role_key)
@@ -35,6 +40,10 @@ class Settings(BaseSettings):
         if not self.cors_origins.strip():
             return []
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def is_production(self) -> bool:
+        return self.app_env.lower() == "production"
 
 
 @lru_cache

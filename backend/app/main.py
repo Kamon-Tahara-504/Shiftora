@@ -10,6 +10,8 @@ from app.db import get_supabase
 from app.auth.router import router as auth_router
 from app.error_handling import register_handlers
 from app.org.router import router as org_router
+from app.security.headers import SecurityHeadersMiddleware
+from app.security.rate_limit import AuthRateLimitMiddleware
 from app.staff.router import router as staff_router
 
 # プロジェクトルートの .env を読む（backend/app/main.py から見て ../../.env）
@@ -31,6 +33,8 @@ if origins:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(AuthRateLimitMiddleware)
 register_handlers(app)
 app.include_router(auth_router)
 app.include_router(org_router)

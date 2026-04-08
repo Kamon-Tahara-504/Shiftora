@@ -43,8 +43,14 @@ export default function ShiftCalendarPage() {
   const today = new Date();
   const [displayYear, setDisplayYear] = useState(today.getFullYear());
   const [displayMonth, setDisplayMonth] = useState(today.getMonth() + 1);
-  const { shifts, isLoading: isShiftsLoading, fetchShifts } = useShifts();
+  const { shifts, isLoading: isShiftsLoading, fetchShifts, patchShift } = useShifts();
   const { employees } = useEmployees();
+  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null);
+  const [editEmployeeId, setEditEmployeeId] = useState("");
+  const [editDepartment, setEditDepartment] = useState<"daycare" | "visit">("daycare");
+  const [editSlot, setEditSlot] = useState<"AM" | "PM">("AM");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
     fetchShifts(displayYear, displayMonth);
@@ -78,6 +84,11 @@ export default function ShiftCalendarPage() {
     return { daycareCount, visitCount };
   }, [shifts]);
 
+  const selectedShift = useMemo(
+    () => shifts.find((item) => item.id === selectedShiftId) ?? null,
+    [shifts, selectedShiftId],
+  );
+
   const goPrevMonth = () => {
     if (displayMonth === 1) {
       setDisplayYear((y) => y - 1);
@@ -97,6 +108,37 @@ export default function ShiftCalendarPage() {
   };
 
   const monthLabel = `${displayYear}年${displayMonth}月`;
+
+  useEffect(() => {
+    if (!selectedShift) return;
+    setEditEmployeeId(selectedShift.employee_id);
+    setEditDepartment(selectedShift.department);
+    setEditSlot(selectedShift.slot);
+    setEditError(null);
+  }, [selectedShift]);
+
+  async function handleSaveShiftEdit() {
+    if (!selectedShift) return;
+    setEditError(null);
+    if (!editEmployeeId) {
+      setEditError("担当職員を選択してください。");
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      await patchShift(selectedShift.id, {
+        employee_id: editEmployeeId,
+        department: editDepartment,
+        slot: editSlot,
+      });
+      await fetchShifts(displayYear, displayMonth);
+      setSelectedShiftId(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "シフト更新に失敗しました。");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
 
   return (
     <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
@@ -191,11 +233,12 @@ export default function ShiftCalendarPage() {
                         return (
                           <div
                             key={s.id}
+                            onClick={() => setSelectedShiftId(s.id)}
                             className={`text-[10px] px-1.5 py-0.5 rounded flex items-center justify-between border ${
                               isDaycare 
                                 ? "bg-primary/10 text-primary border-primary/20" 
                                 : "bg-purple-50 text-purple-600 border-purple-100"
-                            }`}
+                            } cursor-pointer`}
                           >
                             <span className="truncate font-medium">{employee?.name || "???"}</span>
                             <span className="shrink-0 scale-90">{s.slot}</span>
@@ -225,6 +268,74 @@ export default function ShiftCalendarPage() {
               <p className="text-xs text-slate-400">PDF書き出し機能は今後実装予定です</p>
             </div>
           </div>
+
+          {selectedShift ? (
+            <section className="mt-8 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="text-sm font-bold text-slate-800">シフト編集</h3>
+                <button
+                  type="button"
+                  onClick={() => setSelectedShiftId(null)}
+                  className="text-xs text-slate-500 hover:text-slate-700"
+                >
+                  閉じる
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label className="text-xs text-slate-600">
+                  担当職員
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    value={editEmployeeId}
+                    onChange={(event) => setEditEmployeeId(event.target.value)}
+                  >
+                    {employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs text-slate-600">
+                  部門
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    value={editDepartment}
+                    onChange={(event) => setEditDepartment(event.target.value as "daycare" | "visit")}
+                  >
+                    <option value="daycare">デイサービス</option>
+                    <option value="visit">訪問介護</option>
+                  </select>
+                </label>
+                <label className="text-xs text-slate-600">
+                  時間帯
+                  <select
+                    className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                    value={editSlot}
+                    onChange={(event) => setEditSlot(event.target.value as "AM" | "PM")}
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </label>
+              </div>
+              {editError ? (
+                <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {editError}
+                </p>
+              ) : null}
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={handleSaveShiftEdit}
+                  disabled={isSavingEdit}
+                  className="inline-flex items-center justify-center px-4 py-2 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {isSavingEdit ? "保存中..." : "変更を保存"}
+                </button>
+              </div>
+            </section>
+          ) : null}
         </div>
       </main>
     </div>

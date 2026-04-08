@@ -5,7 +5,9 @@ import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { EmployeeCreateModal } from "@/components/org/EmployeeCreateModal";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
+import { ApiError, apiUrl } from "@/lib/api";
 import { useEmployees, type EmployeeStatus } from "@/hooks/useEmployees";
+import { inviteStaff } from "@/services/employeeService";
 
 type Employee = {
   id: string;
@@ -57,6 +59,10 @@ function StatusBadge({ status }: { status: EmployeeStatus }) {
 export default function EmployeesPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteResult, setInviteResult] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [isInviting, setIsInviting] = useState(false);
   const { employees, isLoading, error, addEmployee, patchEmployee, refresh } = useEmployees();
 
   const pageSize = 10;
@@ -68,6 +74,31 @@ export default function EmployeesPage() {
   const startIndex = (clampedCurrentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedRows = employees.slice(startIndex, endIndex);
+
+  async function handleInvite(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setInviteError(null);
+    setInviteResult(null);
+    if (!inviteEmail.trim()) {
+      setInviteError("招待先メールアドレスを入力してください。");
+      return;
+    }
+    setIsInviting(true);
+    try {
+      const result = await inviteStaff({ email: inviteEmail.trim().toLowerCase() });
+      const signupUrl = apiUrl(result.signup_url_template.replace("{token}", result.token));
+      setInviteResult(signupUrl);
+      setInviteEmail("");
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setInviteError(err.message);
+      } else {
+        setInviteError("招待の作成に失敗しました。");
+      }
+    } finally {
+      setIsInviting(false);
+    }
+  }
 
   return (
     <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
@@ -110,6 +141,38 @@ export default function EmployeesPage() {
               <p className="text-2xl font-bold mt-1">12</p>
             </div>
           </div>
+
+          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
+            <h3 className="text-sm font-bold text-slate-800 mb-3">スタッフ招待</h3>
+            <form className="flex flex-col md:flex-row md:items-start gap-3" onSubmit={handleInvite}>
+              <input
+                className="w-full md:max-w-md px-4 py-2.5 bg-background-light border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm"
+                type="email"
+                placeholder="staff@example.com"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                required
+              />
+              <button
+                type="submit"
+                disabled={isInviting}
+                className="inline-flex items-center justify-center px-4 py-2.5 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 disabled:opacity-60"
+              >
+                {isInviting ? "作成中..." : "招待リンクを作成"}
+              </button>
+            </form>
+            {inviteError ? (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {inviteError}
+              </p>
+            ) : null}
+            {inviteResult ? (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <p className="text-xs text-emerald-700">招待リンク</p>
+                <p className="mt-1 break-all text-xs text-slate-700">{inviteResult}</p>
+              </div>
+            ) : null}
+          </section>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             {error ? (

@@ -9,6 +9,15 @@ EVENT_SHIFT_GENERATED = "shift_generated"
 EVENT_SHIFT_UPDATED = "shift_updated"
 EVENT_USER_ROLE_CHANGED = "user_role_changed"
 EVENT_INVITATION_CREATED = "invitation_created"
+EVENT_AUTH_LOGIN_SUCCEEDED = "auth_login_succeeded"
+EVENT_AUTH_LOGIN_FAILED = "auth_login_failed"
+EVENT_AUTH_REFRESH_SUCCEEDED = "auth_refresh_succeeded"
+EVENT_AUTH_REFRESH_FAILED = "auth_refresh_failed"
+EVENT_AUTH_LOGOUT = "auth_logout"
+EVENT_AUTH_REGISTER_ORG_SUCCEEDED = "auth_register_org_succeeded"
+EVENT_AUTH_REGISTER_ORG_FAILED = "auth_register_org_failed"
+EVENT_AUTH_SIGNUP_SUCCEEDED = "auth_signup_succeeded"
+EVENT_AUTH_SIGNUP_FAILED = "auth_signup_failed"
 
 
 def append(
