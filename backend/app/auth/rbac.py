@@ -44,6 +44,13 @@ def require_staff(
     return current_user
 
 
+def require_organization_id(current_user: CurrentUser) -> str:
+    """組織配下ユーザーの organization_id を返す。無い場合は 403。"""
+    if not current_user.organization_id:
+        _raise_forbidden()
+    return current_user.organization_id
+
+
 def require_system_role(
     *allowed_roles: str,
 ) -> Callable[..., CurrentUser]:

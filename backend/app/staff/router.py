@@ -13,6 +13,7 @@ from app.auth.constants import (
 )
 from app.auth.deps import CurrentUser
 from app.auth.rbac import require_staff
+from app.auth.rbac import require_organization_id
 from app.org.employees import get_employee_by_user_id
 from app.org.shifts import list_shifts_in_range
 from app.staff.day_offs import (
@@ -32,13 +33,9 @@ def _error_detail(code: str, message: str, details: dict | None = None) -> dict:
 
 def _get_staff_employee_id(current_user: CurrentUser) -> str:
     """staff ユーザーに紐づく employee_id を返す。紐づく職員がいなければ 403。"""
-    if not current_user.organization_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=_error_detail(CODE_FORBIDDEN, "Insufficient permissions"),
-        )
+    org_id = require_organization_id(current_user)
     emp = get_employee_by_user_id(
-        current_user.organization_id,
+        org_id,
         current_user.id,
     )
     if not emp:
@@ -125,7 +122,7 @@ def staff_shifts_list(
     year=2026&month=4 または start=2026-04-01&end=2026-04-30（docs/08）。
     """
     employee_id = _get_staff_employee_id(current_user)
-    org_id = current_user.organization_id
+    org_id = require_organization_id(current_user)
     if start is not None and end is not None:
         start_date, end_date = start, end
     elif year is not None and month is not None:
