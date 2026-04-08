@@ -32,6 +32,19 @@ export type UpdateEmployeeInput = {
   is_active?: boolean;
 };
 
+export type InviteStaffInput = {
+  email: string;
+  role?: "staff";
+};
+
+export type InviteStaffResponse = {
+  token: string;
+  expires_at: string | null;
+  email: string;
+  role: "staff";
+  signup_url_template: string;
+};
+
 export async function getEmployees(includeInactive = true): Promise<ApiEmployee[]> {
   const query = includeInactive ? "?include_inactive=true" : "";
   const response = await apiFetch(`/org/employees${query}`);
@@ -64,4 +77,18 @@ export async function updateEmployee(
     throw await parseApiError(response);
   }
   return (await response.json()) as ApiEmployee;
+}
+
+export async function inviteStaff(input: InviteStaffInput): Promise<InviteStaffResponse> {
+  const response = await apiFetch("/org/invite", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      role: input.role ?? "staff",
+    }),
+  });
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+  return (await response.json()) as InviteStaffResponse;
 }
