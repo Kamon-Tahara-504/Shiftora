@@ -8,6 +8,7 @@ const ACCESS_TOKEN_KEY = "shiftora_access_token";
 const REFRESH_TOKEN_KEY = "shiftora_refresh_token";
 const TOKEN_TYPE_KEY = "shiftora_token_type";
 const UNAUTHORIZED_EVENT = "shiftora:unauthorized";
+let refreshInFlight: Promise<boolean> | null = null;
 
 export type AuthTokens = {
   access_token: string;
@@ -92,6 +93,24 @@ function withAuthHeader(headers: Headers, enabled: boolean): Headers {
   return headers;
 }
 
+async function refreshAccessToken(): Promise<boolean> {
+  const tokens = getStoredAuthTokens();
+  if (!tokens?.refresh_token) {
+    return false;
+  }
+  const response = await fetch(apiUrl("/auth/refresh"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: tokens.refresh_token }),
+  });
+  if (!response.ok) {
+    return false;
+  }
+  const nextTokens = (await response.json()) as AuthTokens;
+  setStoredAuthTokens(nextTokens);
+  return true;
+}
+
 export async function parseApiError(response: Response): Promise<ApiError> {
   let payload: ApiErrorPayload | null = null;
   try {
@@ -117,6 +136,8 @@ export async function apiFetch(
   options: RequestInit = {},
   withAuth = true,
 ): Promise<Response> {
+  const currentPath = path.startsWith("/") ? path : `/${path}`;
+  const isAuthRefreshRequest = currentPath === "/auth/refresh";
   const url = apiUrl(path);
   const headers = new Headers(options.headers ?? {});
   if (!headers.has("Content-Type") && options.body) {
@@ -124,10 +145,30 @@ export async function apiFetch(
   }
   withAuthHeader(headers, withAuth);
 
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers,
   });
+
+  if (withAuth && !isAuthRefreshRequest && response.status === 401) {
+    if (!refreshInFlight) {
+      refreshInFlight = refreshAccessToken().finally(() => {
+        refreshInFlight = null;
+      });
+    }
+    const refreshed = await refreshInFlight;
+    if (refreshed) {
+      const retryHeaders = new Headers(options.headers ?? {});
+      if (!retryHeaders.has("Content-Type") && options.body) {
+        retryHeaders.set("Content-Type", "application/json");
+      }
+      withAuthHeader(retryHeaders, true);
+      response = await fetch(url, {
+        ...options,
+        headers: retryHeaders,
+      });
+    }
+  }
 
   if (response.status === 401) {
     clearStoredAuthTokens();

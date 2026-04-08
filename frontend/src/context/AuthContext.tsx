@@ -9,13 +9,11 @@ import {
   type ReactNode,
 } from "react";
 import {
-  apiFetch,
   clearStoredAuthTokens,
-  parseApiError,
   setStoredAuthTokens,
   unauthorizedEventName,
-  type AuthTokens,
 } from "@/lib/api";
+import { fetchMe, login as loginRequest, logout as logoutRequest } from "@/services/authService";
 
 export type AuthUser = {
   id: string;
@@ -40,29 +38,6 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-async function fetchMe(): Promise<AuthUser> {
-  const response = await apiFetch("/auth/me");
-  if (!response.ok) {
-    throw await parseApiError(response);
-  }
-  return (await response.json()) as AuthUser;
-}
-
-async function doLogin(input: LoginInput): Promise<AuthTokens> {
-  const response = await apiFetch(
-    "/auth/login",
-    {
-      method: "POST",
-      body: JSON.stringify(input),
-    },
-    false,
-  );
-  if (!response.ok) {
-    throw await parseApiError(response);
-  }
-  return (await response.json()) as AuthTokens;
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -79,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (input: LoginInput): Promise<AuthUser> => {
-    const tokens = await doLogin(input);
+    const tokens = await loginRequest(input);
     setStoredAuthTokens(tokens);
     const me = await fetchMe();
     setUser(me);
@@ -88,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async (): Promise<void> => {
     try {
-      await apiFetch("/auth/logout", { method: "POST" });
+      await logoutRequest();
     } catch {
       // noop: local session cleanup is the source of truth on frontend.
     } finally {
