@@ -19,6 +19,18 @@ from app.db import get_supabase
 from app.org.subscription import can_org_invite_more
 
 
+def _first_row(response: Any) -> dict[str, Any] | None:
+    """Supabase レスポンスから先頭1件を安全に取り出す。"""
+    if response is None:
+        return None
+    data = getattr(response, "data", None)
+    if isinstance(data, list):
+        return data[0] if data else None
+    if isinstance(data, dict):
+        return data
+    return None
+
+
 def _user_to_token_payload(user: dict[str, Any]) -> tuple[str, str | None, Any, Any, int]:
     """users 行からトークン用の (user_id, org_id, role, system_role, token_version) を返す。"""
     user_id = str(user["id"])
@@ -54,10 +66,8 @@ def get_user_by_email(email: str) -> dict[str, Any] | None:
     settings = get_settings()
     if not settings.supabase_configured():
         return None
-    r = supabase.table("users").select("*").eq("email", email).maybe_single().execute()
-    if not r.data:
-        return None
-    return r.data
+    r = supabase.table("users").select("*").eq("email", email).limit(1).execute()
+    return _first_row(r)
 
 
 def get_user_by_id(user_id: str) -> dict[str, Any] | None:
@@ -65,10 +75,8 @@ def get_user_by_id(user_id: str) -> dict[str, Any] | None:
     supabase = get_supabase()
     if not supabase:
         return None
-    r = supabase.table("users").select("*").eq("id", user_id).maybe_single().execute()
-    if not r.data:
-        return None
-    return r.data
+    r = supabase.table("users").select("*").eq("id", user_id).limit(1).execute()
+    return _first_row(r)
 
 
 def hash_password(plain: str) -> str:
@@ -124,10 +132,11 @@ def logout(user_id: str) -> bool:
     supabase = get_supabase()
     if not supabase:
         return False
-    r = supabase.table("users").select("token_version").eq("id", user_id).maybe_single().execute()
-    if not r.data:
+    r = supabase.table("users").select("token_version").eq("id", user_id).limit(1).execute()
+    row = _first_row(r)
+    if not row:
         return False
-    new_version = int(r.data.get("token_version", 0)) + 1
+    new_version = int(row.get("token_version", 0)) + 1
     supabase.table("users").update({"token_version": new_version}).eq("id", user_id).execute()
     return True
 
