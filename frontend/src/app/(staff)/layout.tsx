@@ -1,7 +1,9 @@
+import { RequireAuth } from "@/components/auth/RequireAuth";
+
 export default function StaffLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <>{children}</>;
+  return <RequireAuth>{children}</RequireAuth>;
 }

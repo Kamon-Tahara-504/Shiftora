@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
-export default function Home() {
+export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, isLoading } = useAuth();
 
@@ -12,13 +12,7 @@ export default function Home() {
     if (isLoading) return;
     if (!user) {
       router.replace("/login");
-      return;
     }
-    if (user.role === "org_admin") {
-      router.replace("/employees");
-      return;
-    }
-    router.replace("/my-shifts");
   }, [isLoading, user, router]);
 
   if (isLoading) {
@@ -29,5 +23,9 @@ export default function Home() {
     );
   }
 
-  return null;
+  if (!user) {
+    return null;
+  }
+
+  return <>{children}</>;
 }
