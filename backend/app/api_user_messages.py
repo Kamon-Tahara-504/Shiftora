@@ -49,3 +49,8 @@ ALREADY_REQUESTED_DAY_OFF = "同じ日付の希望休は既に申請済みです
 DAY_OFF_NOT_FOUND = "希望休が見つかりません。"
 CANNOT_DELETE_OTHERS_DAY_OFF = "他のユーザーの希望休は取り消せません。"
 REQUIRE_PERIOD_PARAMS = "year+month または start+end を指定してください。"
+
+# admin
+SERVICE_TOKEN_CREATED = "サービス登録トークンを発行しました。"
+SERVICE_TOKEN_REVOKED = "サービス登録トークンを失効しました。"
+SERVICE_TOKEN_NOT_FOUND = "指定されたサービス登録トークンが見つかりません。"
