@@ -15,7 +15,6 @@ export type UiEmployee = {
   name: string;
   department: "デイサービス" | "訪問介護";
   status: EmployeeStatus;
-  avatarUrl: string;
 };
 
 type CreateUiEmployeeInput = {
@@ -38,17 +37,12 @@ function toStatus(employee: ApiEmployee): EmployeeStatus {
   return employee.is_active ? "active" : "inactive";
 }
 
-function fallbackAvatar(employeeId: string): string {
-  return `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(employeeId)}`;
-}
-
 function toUiEmployee(employee: ApiEmployee): UiEmployee {
   return {
     id: employee.id,
     name: employee.name,
     department: toDepartment(employee),
     status: toStatus(employee),
-    avatarUrl: fallbackAvatar(employee.id),
   };
 }
 

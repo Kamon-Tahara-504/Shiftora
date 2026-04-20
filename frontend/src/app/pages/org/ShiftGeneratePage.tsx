@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
-import { CheckCircle2, History, Info, TrendingUp, Users, Zap, AlertCircle } from "lucide-react";
+import { Info, Users, Zap, AlertCircle } from "lucide-react";
 import { useShiftGeneration } from "@/hooks/useShiftGeneration";
 import { useEmployees } from "@/hooks/useEmployees";
 
@@ -16,6 +16,7 @@ export default function ShiftGeneratePage() {
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
+  const yearOptions = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1];
 
   const handleGenerate = async () => {
     const success = await triggerGeneration(selectedYear, selectedMonth);
@@ -98,9 +99,11 @@ export default function ShiftGeneratePage() {
                       value={selectedYear}
                       onChange={(e) => setSelectedYear(parseInt(e.target.value))}
                     >
-                      <option value={2024}>2024年</option>
-                      <option value={2025}>2025年</option>
-                      <option value={2026}>2026年</option>
+                      {yearOptions.map((year) => (
+                        <option key={year} value={year}>
+                          {year}年
+                        </option>
+                      ))}
                     </select>
                   </label>
 

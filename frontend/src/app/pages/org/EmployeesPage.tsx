@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { EmployeeCreateModal } from "@/components/org/EmployeeCreateModal";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
 import { ApiError, apiUrl } from "@/lib/api";
 import { useEmployees, type EmployeeStatus } from "@/hooks/useEmployees";
+import { useShifts } from "@/hooks/useShifts";
 import { inviteStaff } from "@/services/employeeService";
 
 type Employee = {
@@ -14,7 +15,6 @@ type Employee = {
   name: string;
   department: "デイサービス" | "訪問介護";
   status: EmployeeStatus;
-  avatarUrl: string;
 };
 
 
@@ -64,16 +64,33 @@ export default function EmployeesPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [isInviting, setIsInviting] = useState(false);
   const { employees, isLoading, error, addEmployee, patchEmployee, refresh } = useEmployees();
+  const { shifts, fetchShifts } = useShifts();
 
   const pageSize = 10;
   const [currentPage, setCurrentPage] = useState(1);
 
   const totalCount = employees.length;
+  const activeCount = useMemo(
+    () => employees.filter((employee) => employee.status === "active").length,
+    [employees],
+  );
+  const inactiveCount = totalCount - activeCount;
+  const currentMonthShiftCount = shifts.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const clampedCurrentPage = Math.min(currentPage, totalPages);
   const startIndex = (clampedCurrentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedRows = employees.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    const now = new Date();
+    fetchShifts(now.getFullYear(), now.getMonth() + 1);
+  }, [fetchShifts]);
+
+  function initials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "NA";
+  }
 
   async function handleInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -126,19 +143,20 @@ export default function EmployeesPage() {
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
                 総職員数
               </p>
-              <p className="text-2xl font-bold mt-1">124</p>
+              <p className="text-2xl font-bold mt-1">{totalCount}</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
-                稼働中のシフト
+                有効職員数
               </p>
-              <p className="text-2xl font-bold mt-1 text-primary">82</p>
+              <p className="text-2xl font-bold mt-1 text-primary">{activeCount}</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
-                承認待ち
+                今月のシフト件数
               </p>
-              <p className="text-2xl font-bold mt-1">12</p>
+              <p className="text-2xl font-bold mt-1">{currentMonthShiftCount}</p>
+              <p className="mt-1 text-[11px] text-slate-500">無効職員 {inactiveCount} 名</p>
             </div>
           </div>
 
@@ -226,11 +244,9 @@ export default function EmployeesPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="size-9 rounded-full bg-slate-200 overflow-hidden">
-                              <img
-                                src={employee.avatarUrl}
-                                alt={employee.name}
-                                className="w-full h-full object-cover"
-                              />
+                              <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-600">
+                                {initials(employee.name)}
+                              </div>
                             </div>
                             <span className="font-semibold text-sm">
                               {employee.name}
