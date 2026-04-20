@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AuthAppHeader } from "@/components/auth/AuthAppHeader";
+import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import { useAuth } from "@/hooks/useAuth";
 import {
   adminIssueServiceToken,
@@ -88,19 +87,14 @@ export default function AdminTokensPage() {
   }
 
   return (
-    <div className="bg-background-light font-display text-slate-900 min-h-screen flex flex-col">
-      <AuthAppHeader />
-      <main className="flex-grow p-4 md:p-8">
+    <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
+      <AdminSidebar />
+      <main className="flex-1 h-screen overflow-y-auto bg-background-light p-4 md:p-8">
         <div className="mx-auto max-w-5xl space-y-6">
           <div className="rounded-xl border border-primary/10 bg-white p-6 shadow-xl shadow-primary/5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold">管理: サービス登録トークン</h2>
-                <p className="mt-2 text-sm text-slate-500">組織作成用トークンを発行・一覧・失効できます。</p>
-              </div>
-              <Link href="/admin/organizations" className="text-sm text-primary font-bold hover:underline">
-                組織人数監査へ
-              </Link>
+            <div>
+              <h2 className="text-2xl font-bold">管理: サービス登録トークン</h2>
+              <p className="mt-2 text-sm text-slate-500">組織作成用トークンを発行・一覧・失効できます。</p>
             </div>
 
             <div className="mt-6 rounded-lg border border-slate-200 p-4">
