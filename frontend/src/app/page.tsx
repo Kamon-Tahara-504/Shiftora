@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
+const ADMIN_SYSTEM_ROLES = new Set(["super_admin", "support_admin"]);
+
 export default function Home() {
   const router = useRouter();
   const { user, isLoading } = useAuth();
@@ -12,6 +14,10 @@ export default function Home() {
     if (isLoading) return;
     if (!user) {
       router.replace("/login");
+      return;
+    }
+    if (user.system_role && ADMIN_SYSTEM_ROLES.has(user.system_role)) {
+      router.replace("/admin/tokens");
       return;
     }
     if (!user.role) {
