@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { EmployeeCreateModal } from "@/components/org/EmployeeCreateModal";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
-import { ApiError, apiUrl } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { useEmployees, type EmployeeStatus } from "@/hooks/useEmployees";
+import { useShifts } from "@/hooks/useShifts";
 import { inviteStaff } from "@/services/employeeService";
 
 type Employee = {
@@ -14,7 +15,6 @@ type Employee = {
   name: string;
   department: "デイサービス" | "訪問介護";
   status: EmployeeStatus;
-  avatarUrl: string;
 };
 
 
@@ -64,16 +64,33 @@ export default function EmployeesPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [isInviting, setIsInviting] = useState(false);
   const { employees, isLoading, error, addEmployee, patchEmployee, refresh } = useEmployees();
+  const { shifts, fetchShifts } = useShifts();
 
   const pageSize = 10;
   const [currentPage, setCurrentPage] = useState(1);
 
   const totalCount = employees.length;
+  const activeCount = useMemo(
+    () => employees.filter((employee) => employee.status === "active").length,
+    [employees],
+  );
+  const inactiveCount = totalCount - activeCount;
+  const currentMonthShiftCount = shifts.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const clampedCurrentPage = Math.min(currentPage, totalPages);
   const startIndex = (clampedCurrentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedRows = employees.slice(startIndex, endIndex);
+
+  useEffect(() => {
+    const now = new Date();
+    fetchShifts(now.getFullYear(), now.getMonth() + 1);
+  }, [fetchShifts]);
+
+  function initials(name: string): string {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "NA";
+  }
 
   async function handleInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,8 +103,7 @@ export default function EmployeesPage() {
     setIsInviting(true);
     try {
       const result = await inviteStaff({ email: inviteEmail.trim().toLowerCase() });
-      const signupUrl = apiUrl(result.signup_url_template.replace("{token}", result.token));
-      setInviteResult(signupUrl);
+      setInviteResult(`招待を作成しました（対象: ${result.email} / 有効期限: ${result.expires_at ?? "未設定"}）`);
       setInviteEmail("");
     } catch (err) {
       if (err instanceof ApiError) {
@@ -126,29 +142,30 @@ export default function EmployeesPage() {
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
                 総職員数
               </p>
-              <p className="text-2xl font-bold mt-1">124</p>
+              <p className="text-2xl font-bold mt-1">{totalCount}</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
-                稼働中のシフト
+                有効職員数
               </p>
-              <p className="text-2xl font-bold mt-1 text-primary">82</p>
+              <p className="text-2xl font-bold mt-1 text-primary">{activeCount}</p>
             </div>
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <p className="text-slate-500 text-xs font-medium uppercase tracking-wider">
-                承認待ち
+                今月のシフト件数
               </p>
-              <p className="text-2xl font-bold mt-1">12</p>
+              <p className="text-2xl font-bold mt-1">{currentMonthShiftCount}</p>
+              <p className="mt-1 text-[11px] text-slate-500">無効職員 {inactiveCount} 名</p>
             </div>
           </div>
 
           <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
-            <h3 className="text-sm font-bold text-slate-800 mb-3">スタッフ招待</h3>
+            <h3 className="text-sm font-bold text-slate-800 mb-3">登録済みユーザー招待</h3>
             <form className="flex flex-col md:flex-row md:items-start gap-3" onSubmit={handleInvite}>
               <input
                 className="w-full md:max-w-md px-4 py-2.5 bg-background-light border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm"
                 type="email"
-                placeholder="staff@example.com"
+                placeholder="登録済みユーザーのメールアドレス"
                 value={inviteEmail}
                 onChange={(event) => setInviteEmail(event.target.value)}
                 required
@@ -158,7 +175,7 @@ export default function EmployeesPage() {
                 disabled={isInviting}
                 className="inline-flex items-center justify-center px-4 py-2.5 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 disabled:opacity-60"
               >
-                {isInviting ? "作成中..." : "招待リンクを作成"}
+                {isInviting ? "作成中..." : "招待を作成"}
               </button>
             </form>
             {inviteError ? (
@@ -168,7 +185,7 @@ export default function EmployeesPage() {
             ) : null}
             {inviteResult ? (
               <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                <p className="text-xs text-emerald-700">招待リンク</p>
+                <p className="text-xs text-emerald-700">招待作成結果</p>
                 <p className="mt-1 break-all text-xs text-slate-700">{inviteResult}</p>
               </div>
             ) : null}
@@ -226,11 +243,9 @@ export default function EmployeesPage() {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className="size-9 rounded-full bg-slate-200 overflow-hidden">
-                              <img
-                                src={employee.avatarUrl}
-                                alt={employee.name}
-                                className="w-full h-full object-cover"
-                              />
+                              <div className="flex h-full w-full items-center justify-center text-xs font-bold text-slate-600">
+                                {initials(employee.name)}
+                              </div>
                             </div>
                             <span className="font-semibold text-sm">
                               {employee.name}

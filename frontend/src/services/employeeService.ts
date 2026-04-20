@@ -38,11 +38,12 @@ export type InviteStaffInput = {
 };
 
 export type InviteStaffResponse = {
-  token: string;
+  id: string;
   expires_at: string | null;
   email: string;
+  user_id: string;
   role: "staff";
-  signup_url_template: string;
+  status: "pending";
 };
 
 export async function getEmployees(includeInactive = true): Promise<ApiEmployee[]> {

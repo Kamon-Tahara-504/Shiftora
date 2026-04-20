@@ -70,6 +70,28 @@ def create_employee(
     return r.data[0]
 
 
+def create_employee_for_user(
+    organization_id: str,
+    user_id: str,
+    name: str,
+) -> dict[str, Any] | None:
+    """ユーザー紐づきの職員を作成する。"""
+    supabase = get_supabase()
+    if not supabase:
+        return None
+    row: dict[str, Any] = {
+        "organization_id": organization_id,
+        "user_id": user_id,
+        "name": name.strip() or "スタッフ",
+        "can_visit": False,
+        "is_active": True,
+    }
+    r = supabase.table("employees").insert(row).execute()
+    if not r.data:
+        return None
+    return r.data[0]
+
+
 def get_employee(organization_id: str, employee_id: str) -> dict[str, Any] | None:
     """組織に属する職員を 1 件取得する。存在しない・他組織の場合は None。"""
     supabase = get_supabase()

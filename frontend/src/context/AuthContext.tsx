@@ -17,9 +17,11 @@ import { fetchMe, login as loginRequest, logout as logoutRequest } from "@/servi
 
 export type AuthUser = {
   id: string;
+  first_name: string | null;
+  last_name: string | null;
   email: string;
   organization_id: string | null;
-  role: "org_admin" | "staff";
+  role: "org_admin" | "staff" | null;
   system_role: string | null;
 };
 

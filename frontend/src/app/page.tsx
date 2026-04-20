@@ -14,6 +14,10 @@ export default function Home() {
       router.replace("/login");
       return;
     }
+    if (!user.role) {
+      router.replace("/invitations");
+      return;
+    }
     if (user.role === "org_admin") {
       router.replace("/employees");
       return;

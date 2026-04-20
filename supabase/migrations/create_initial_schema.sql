@@ -23,6 +23,8 @@ CREATE TABLE subscriptions (
 CREATE TABLE users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  first_name TEXT,
+  last_name TEXT,
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT,
   role TEXT CHECK (role IN ('org_admin', 'staff')),

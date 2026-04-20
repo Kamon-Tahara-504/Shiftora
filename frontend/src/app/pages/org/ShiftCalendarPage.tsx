@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { ChevronLeft, ChevronRight, CalendarPlus } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
 import { useShifts } from "@/hooks/useShifts";
@@ -183,13 +183,6 @@ export default function ShiftCalendarPage() {
                     <ChevronRight className="size-4 md:size-5" />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 px-4 md:px-5 py-2 md:py-2.5 bg-primary text-white text-xs md:text-sm font-bold rounded-lg hover:bg-primary/90 shadow-sm shadow-primary/20"
-                >
-                  <CalendarPlus className="size-4 md:size-5" />
-                  <span>シフトを追加</span>
-                </button>
               </div>
             }
           />
@@ -240,7 +233,7 @@ export default function ShiftCalendarPage() {
                                 : "bg-purple-50 text-purple-600 border-purple-100"
                             } cursor-pointer`}
                           >
-                            <span className="truncate font-medium">{employee?.name || "???"}</span>
+                            <span className="truncate font-medium">{employee?.name || "不明な職員"}</span>
                             <span className="shrink-0 scale-90">{s.slot}</span>
                           </div>
                         );
@@ -264,8 +257,10 @@ export default function ShiftCalendarPage() {
               <h4 className="text-2xl font-black text-purple-500">{isShiftsLoading ? "..." : stats.visitCount} 枠</h4>
               <p className="text-xs text-slate-500 mt-1">今月の総割り当て数</p>
             </div>
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex items-center justify-center">
-              <p className="text-xs text-slate-400">PDF書き出し機能は今後実装予定です</p>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+              <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">総シフト件数</p>
+              <h4 className="text-2xl font-black text-slate-700">{isShiftsLoading ? "..." : shifts.length} 件</h4>
+              <p className="text-xs text-slate-500 mt-1">表示中の月の割り当て総数</p>
             </div>
           </div>
 

@@ -27,7 +27,11 @@ export default function LoginPage() {
         router.push("/employees");
         return;
       }
-      router.push("/my-shifts");
+      if (me.role === "staff") {
+        router.push("/my-shifts");
+        return;
+      }
+      router.push("/invitations");
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
