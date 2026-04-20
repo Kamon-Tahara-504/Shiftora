@@ -5,12 +5,25 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from app.auth.constants import TOKEN_TYPE_ACCESS
+from app.api_user_messages import (
+    AUTH_NOT_CONFIGURED,
+    INVALID_OR_EXPIRED_TOKEN,
+    INVALID_TOKEN,
+    NOT_AUTHENTICATED,
+    TOKEN_REVOKED,
+    USER_NOT_FOUND,
+)
+from app.auth.constants import CODE_AUTH_NOT_CONFIGURED, CODE_INVALID_TOKEN, TOKEN_TYPE_ACCESS
 from app.auth.jwt import decode_token
 from app.auth.service import get_user_by_id
 from app.config import get_settings
 
 HTTP_BEARER = HTTPBearer(auto_error=False)
+
+
+def _error_detail(code: str, message: str) -> dict:
+    """docs/08-api.md のエラー形式 { code, message, details } を返す。"""
+    return {"code": code, "message": message, "details": {}}
 
 
 class CurrentUser(BaseModel):
@@ -31,33 +44,39 @@ def get_current_user(
     if not get_settings().jwt_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Auth not configured",
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+            detail=_error_detail(CODE_INVALID_TOKEN, NOT_AUTHENTICATED),
             headers={"WWW-Authenticate": "Bearer"},
         )
     payload = decode_token(credentials.credentials)
     if not payload or payload.get("type") != TOKEN_TYPE_ACCESS:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail=_error_detail(CODE_INVALID_TOKEN, INVALID_OR_EXPIRED_TOKEN),
             headers={"WWW-Authenticate": "Bearer"},
         )
     user_id = payload.get("sub")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
+            detail=_error_detail(CODE_INVALID_TOKEN, INVALID_TOKEN),
             headers={"WWW-Authenticate": "Bearer"},
         )
     user = get_user_by_id(user_id)
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_error_detail(CODE_INVALID_TOKEN, USER_NOT_FOUND),
+        )
     if int(user.get("token_version", 0)) != int(payload.get("token_version", -1)):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revoked")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_error_detail(CODE_INVALID_TOKEN, TOKEN_REVOKED),
+        )
     org_id = user.get("organization_id")
     return CurrentUser(
         id=str(user["id"]),

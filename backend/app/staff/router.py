@@ -6,6 +6,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
+from app.api_user_messages import (
+    ALREADY_REQUESTED_DAY_OFF,
+    CANNOT_DELETE_OTHERS_DAY_OFF,
+    DAY_OFF_NOT_FOUND,
+    NO_LINKED_EMPLOYEE,
+    REQUIRE_PERIOD_PARAMS,
+)
 from app.auth.constants import (
     CODE_FORBIDDEN,
     CODE_NOT_FOUND,
@@ -43,7 +50,7 @@ def _get_staff_employee_id(current_user: CurrentUser) -> str:
             status_code=status.HTTP_403_FORBIDDEN,
             detail=_error_detail(
                 CODE_FORBIDDEN,
-                "No employee record linked to your account",
+                NO_LINKED_EMPLOYEE,
             ),
         )
     return str(emp["id"])
@@ -80,7 +87,7 @@ def day_offs_create(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(
                 CODE_VALIDATION_ERROR,
-                "Already requested for this date",
+                ALREADY_REQUESTED_DAY_OFF,
                 {"date": body.date},
             ),
         )
@@ -101,11 +108,11 @@ def day_offs_delete(
         if not req:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=_error_detail(CODE_NOT_FOUND, "Day-off request not found"),
+                detail=_error_detail(CODE_NOT_FOUND, DAY_OFF_NOT_FOUND),
             )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=_error_detail(CODE_FORBIDDEN, "Cannot delete another user's request"),
+            detail=_error_detail(CODE_FORBIDDEN, CANNOT_DELETE_OTHERS_DAY_OFF),
         )
 
 
@@ -134,7 +141,7 @@ def staff_shifts_list(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(
                 CODE_VALIDATION_ERROR,
-                "Either year+month or start+end is required",
+                REQUIRE_PERIOD_PARAMS,
                 {},
             ),
         )

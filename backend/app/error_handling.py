@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from app.api_user_messages import INTERNAL_SERVER_ERROR, INVALID_REQUEST, REQUEST_FAILED
 from app.auth.constants import CODE_INTERNAL_ERROR, CODE_VALIDATION_ERROR
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ def _validation_error_body(err: RequestValidationError) -> dict[str, Any]:
     errors = err.errors()
     return _standard_body(
         CODE_VALIDATION_ERROR,
-        "Validation error",
+        INVALID_REQUEST,
         {"errors": errors},
     )
 
@@ -39,7 +40,7 @@ def _http_exception_body(detail: Any, status_code: int) -> dict[str, Any]:
         }
     return _standard_body(
         CODE_INTERNAL_ERROR if status_code >= 500 else "error",
-        str(detail) if detail else "Error",
+        str(detail) if detail else (INTERNAL_SERVER_ERROR if status_code >= 500 else REQUEST_FAILED),
     )
 
 
@@ -70,7 +71,7 @@ async def _unhandled_exception_handler(
 ) -> JSONResponse:
     """未処理例外: 500 を返し、スタックトレースをログに記録。クライアントには漏らさない。"""
     logger.exception("Unhandled exception: %s", exc)
-    body = _standard_body(CODE_INTERNAL_ERROR, "Internal server error", {})
+    body = _standard_body(CODE_INTERNAL_ERROR, INTERNAL_SERVER_ERROR, {})
     return JSONResponse(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content=body)
 
 

@@ -39,6 +39,14 @@ from app.auth.service import (
     signup as do_signup,
 )
 from app.auth.jwt import decode_token
+from app.api_user_messages import (
+    AUTH_NOT_CONFIGURED,
+    INVALID_CREDENTIALS,
+    INVALID_REQUEST,
+    REFRESH_FAILED,
+    REGISTRATION_FAILED,
+    SIGNUP_FAILED,
+)
 from app.config import get_settings
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -75,7 +83,7 @@ def _require_jwt_configured() -> None:
     if not get_settings().jwt_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
 
 
@@ -85,7 +93,7 @@ def _require_auth_configured() -> None:
     if not s.jwt_configured() or not s.supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
 
 
@@ -139,7 +147,7 @@ def login(body: LoginRequest):
         _log_auth_failure(EVENT_AUTH_LOGIN_FAILED, {"reason": "validation_failed"})
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(CODE_VALIDATION_ERROR, "Invalid request"),
+            detail=_error_detail(CODE_VALIDATION_ERROR, INVALID_REQUEST),
         )
     result = do_login(email, password)
     if not result:
@@ -149,7 +157,7 @@ def login(body: LoginRequest):
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_error_detail(CODE_INVALID_CREDENTIALS, "Authentication failed"),
+            detail=_error_detail(CODE_INVALID_CREDENTIALS, INVALID_CREDENTIALS),
         )
     # do_login は tokens のみ返すため、監査ログ用にユーザーを再取得する。
     found = get_user_by_email(email.strip().lower())
@@ -176,14 +184,14 @@ def refresh(body: RefreshRequest):
         _log_auth_failure(EVENT_AUTH_REFRESH_FAILED, {"reason": "validation_failed"})
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(CODE_VALIDATION_ERROR, "Invalid request"),
+            detail=_error_detail(CODE_VALIDATION_ERROR, INVALID_REQUEST),
         )
     result = refresh_tokens(refresh_token)
     if not result:
         _log_auth_failure(EVENT_AUTH_REFRESH_FAILED, {"reason": "invalid_token"})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=_error_detail(CODE_INVALID_TOKEN, "Authentication failed"),
+            detail=_error_detail(CODE_INVALID_TOKEN, REFRESH_FAILED),
         )
     payload = decode_token(result["access_token"])
     if payload and payload.get("org_id") and payload.get("sub"):
@@ -233,7 +241,7 @@ def register_org(body: RegisterOrgRequest):
         )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(CODE_EMAIL_ALREADY_REGISTERED, "Registration failed"),
+            detail=_error_detail(CODE_EMAIL_ALREADY_REGISTERED, REGISTRATION_FAILED),
         )
     tokens = build_token_response(user)
     audit_append(
@@ -267,7 +275,7 @@ def signup(body: SignupRequest):
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=_error_detail(
                     CODE_MAX_USERS_EXCEEDED,
-                    "Signup failed",
+                    SIGNUP_FAILED,
                 ),
             )
         if error_code == "subscription_inactive":
@@ -275,14 +283,14 @@ def signup(body: SignupRequest):
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=_error_detail(
                     CODE_SUBSCRIPTION_INACTIVE,
-                    "Signup failed",
+                    SIGNUP_FAILED,
                 ),
             )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(
                 CODE_INVALID_INVITATION,
-                "Signup failed",
+                SIGNUP_FAILED,
             ),
         )
     audit_append(

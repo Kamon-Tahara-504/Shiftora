@@ -3,6 +3,7 @@ from typing import Annotated, Callable
 
 from fastapi import Depends, HTTPException, status
 
+from app.api_user_messages import FORBIDDEN
 from app.auth.constants import (
     CODE_FORBIDDEN,
     ROLE_ORG_ADMIN,
@@ -10,7 +11,7 @@ from app.auth.constants import (
 )
 from app.auth.deps import CurrentUser, get_current_user
 
-FORBIDDEN_MESSAGE = "Insufficient permissions"
+FORBIDDEN_MESSAGE = FORBIDDEN
 
 
 def _forbidden_detail(message: str = FORBIDDEN_MESSAGE) -> dict:

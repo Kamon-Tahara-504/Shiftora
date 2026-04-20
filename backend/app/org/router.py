@@ -6,6 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 
+from app.api_user_messages import (
+    AUTH_NOT_CONFIGURED,
+    FAILED_CLEAR_SHIFTS,
+    FAILED_CREATE_EMPLOYEE,
+    FAILED_CREATE_INVITATION,
+    FAILED_GENERATE_SHIFTS,
+    FAILED_SAVE_SHIFTS,
+    FORBIDDEN,
+    INVALID_PERIOD,
+    INVITE_LIMIT_REACHED,
+    SHIFT_NOT_FOUND,
+    SUBSCRIPTION_INACTIVE,
+    EMPLOYEE_NOT_FOUND,
+)
 from app.auth.constants import (
     CODE_AUTH_NOT_CONFIGURED,
     CODE_FORBIDDEN,
@@ -69,13 +83,13 @@ def invite(
     if not get_settings().supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
     org_id = current_user.organization_id
     if not org_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=_error_detail(CODE_FORBIDDEN, "Insufficient permissions"),
+            detail=_error_detail(CODE_FORBIDDEN, FORBIDDEN),
         )
     can_invite, reason = can_org_invite_more(org_id)
     if not can_invite:
@@ -84,14 +98,14 @@ def invite(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=_error_detail(
                     CODE_MAX_USERS_EXCEEDED,
-                    "Cannot invite: organization user limit reached",
+                    INVITE_LIMIT_REACHED,
                 ),
             )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(
                 CODE_SUBSCRIPTION_INACTIVE,
-                "Cannot invite: subscription is not active",
+                SUBSCRIPTION_INACTIVE,
             ),
         )
     result = create_invitation(
@@ -109,7 +123,7 @@ def invite(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to create invitation"),
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
         )
     token = result.get("token", "")
     expires_at = result.get("expires_at")
@@ -185,7 +199,7 @@ def employees_create(
     if not get_settings().supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
     org_id = require_organization_id(current_user)
     emp = create_employee(
@@ -200,7 +214,7 @@ def employees_create(
     if emp is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to create employee"),
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_EMPLOYEE),
         )
     audit_append(
         org_id,
@@ -221,7 +235,7 @@ def employees_update(
     if not get_settings().supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
     org_id = require_organization_id(current_user)
     updates = body.model_dump(exclude_unset=True)
@@ -229,7 +243,7 @@ def employees_update(
     if emp is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_detail(CODE_NOT_FOUND, "Employee not found"),
+            detail=_error_detail(CODE_NOT_FOUND, EMPLOYEE_NOT_FOUND),
         )
     return _employee_to_response(emp)
 
@@ -255,7 +269,7 @@ def shifts_generate(
     if not get_settings().supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
     org_id = require_organization_id(current_user)
     today = date.today()
@@ -264,7 +278,7 @@ def shifts_generate(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(
                 CODE_INVALID_PERIOD,
-                "Cannot generate shifts for past months",
+                INVALID_PERIOD,
                 {"year": body.year, "month": body.month},
             ),
         )
@@ -272,7 +286,7 @@ def shifts_generate(
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to generate shifts"),
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_GENERATE_SHIFTS),
         )
     if result.status == "infeasible":
         api_body = solve_result_to_api(result)
@@ -284,7 +298,7 @@ def shifts_generate(
     if not delete_shifts_for_month(org_id, body.year, body.month):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to clear existing shifts"),
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CLEAR_SHIFTS),
         )
     assignments = [
         {
@@ -299,7 +313,7 @@ def shifts_generate(
     if inserted is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=_error_detail(CODE_INTERNAL_ERROR, "Failed to save shifts"),
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_SAVE_SHIFTS),
         )
     audit_append(
         org_id,
@@ -336,7 +350,7 @@ def shifts_list(
     if not get_settings().supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
     org_id = require_organization_id(current_user)
     rows = list_shifts(org_id, year, month)
@@ -363,7 +377,7 @@ def shifts_patch(
     if not get_settings().supabase_configured():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, "Auth not configured"),
+            detail=_error_detail(CODE_AUTH_NOT_CONFIGURED, AUTH_NOT_CONFIGURED),
         )
     org_id = require_organization_id(current_user)
     updates = body.model_dump(exclude_unset=True)
@@ -373,20 +387,20 @@ def shifts_patch(
         if not row:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
+                detail=_error_detail(CODE_NOT_FOUND, SHIFT_NOT_FOUND),
             )
         return _shift_to_response(row)
     before = get_shift(org_id, shift_id)
     if not before:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
+            detail=_error_detail(CODE_NOT_FOUND, SHIFT_NOT_FOUND),
         )
     updated = update_shift(org_id, shift_id, **updates)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=_error_detail(CODE_NOT_FOUND, "Shift not found"),
+            detail=_error_detail(CODE_NOT_FOUND, SHIFT_NOT_FOUND),
         )
     audit_append(
         org_id,
