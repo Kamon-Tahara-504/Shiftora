@@ -29,6 +29,8 @@ def _error_detail(code: str, message: str) -> dict:
 class CurrentUser(BaseModel):
     """認証済みユーザーのコンテキスト。JWT/DB から 1 回だけ組み立て、ルートと RBAC で共有する。"""
     id: str
+    first_name: str | None
+    last_name: str | None
     email: str
     organization_id: str | None
     role: str | None  # org_admin | staff | None（システムユーザーは None）
@@ -80,6 +82,8 @@ def get_current_user(
     org_id = user.get("organization_id")
     return CurrentUser(
         id=str(user["id"]),
+        first_name=str(user.get("first_name")) if user.get("first_name") else None,
+        last_name=str(user.get("last_name")) if user.get("last_name") else None,
         email=str(user.get("email", "")),
         organization_id=str(org_id) if org_id is not None else None,
         role=user.get("role"),

@@ -16,6 +16,12 @@ from app.api_user_messages import (
     FORBIDDEN,
     INVALID_PERIOD,
     INVITE_LIMIT_REACHED,
+    INVITATION_ACCEPTED,
+    INVITATION_ALREADY_EXISTS,
+    INVITATION_EXPIRED,
+    INVITATION_NOT_ALLOWED,
+    INVITATION_NOT_FOUND,
+    INVITATION_USER_NOT_FOUND,
     SHIFT_NOT_FOUND,
     SUBSCRIPTION_INACTIVE,
     EMPLOYEE_NOT_FOUND,
@@ -24,16 +30,23 @@ from app.auth.constants import (
     CODE_AUTH_NOT_CONFIGURED,
     CODE_FORBIDDEN,
     CODE_INTERNAL_ERROR,
+    CODE_INVITATION_ALREADY_EXISTS,
     CODE_INVALID_PERIOD,
     CODE_MAX_USERS_EXCEEDED,
     CODE_NOT_FOUND,
     CODE_SUBSCRIPTION_INACTIVE,
+    CODE_VALIDATION_ERROR,
+    CODE_USER_NOT_FOUND,
 )
-from app.auth.deps import CurrentUser
+from app.auth.deps import CurrentUser, get_current_user
 from app.auth.rbac import require_org_admin, require_organization_id
+from app.auth.service import build_token_response, get_user_by_email, get_user_by_id
 from app.config import get_settings
+from app.db import get_supabase
 from app.org.employees import (
     create_employee,
+    create_employee_for_user,
+    get_employee_by_user_id,
     get_employee,
     list_employees,
     update_employee,
@@ -43,9 +56,17 @@ from app.audit.service import (
     EVENT_INVITATION_CREATED,
     EVENT_SHIFT_GENERATED,
     EVENT_SHIFT_UPDATED,
+    EVENT_USER_ROLE_CHANGED,
     append as audit_append,
 )
-from app.org.service import create_invitation
+from app.org.invitations import (
+    create_organization_invitation,
+    get_invitation,
+    invitation_is_expired,
+    list_organization_invitations_for_admin,
+    list_pending_invitations_for_user,
+    mark_invitation_accepted,
+)
 from app.org.shifts import (
     delete_shifts_for_month,
     get_shift,
@@ -78,7 +99,7 @@ def invite(
     """
     POST /org/invite（org_admin のみ）
     body: { "email": "...", "role": "staff" }。
-    invitation_tokens に 1 件作成し、招待リンク用の token を返す。MVP ではメール送信は行わない。
+    既存登録ユーザーに組織招待を作成する。
     """
     if not get_settings().supabase_configured():
         raise HTTPException(
@@ -108,11 +129,34 @@ def invite(
                 SUBSCRIPTION_INACTIVE,
             ),
         )
-    result = create_invitation(
+    invited = get_user_by_email(body.email.strip().lower())
+    if invited is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_USER_NOT_FOUND, INVITATION_USER_NOT_FOUND),
+        )
+    invited_org_id = invited.get("organization_id")
+    if invited_org_id and str(invited_org_id) == org_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, INVITATION_ALREADY_EXISTS),
+        )
+    if invited_org_id and str(invited_org_id) != org_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, "他組織に所属中のユーザーは招待できません。"),
+        )
+    result, err = create_organization_invitation(
         organization_id=org_id,
-        email=body.email,
+        user_id=str(invited["id"]),
+        invited_by=current_user.id,
         role=body.role,
     )
+    if err == "invitation_already_exists":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, INVITATION_ALREADY_EXISTS),
+        )
     if result is not None:
         audit_append(
             org_id,
@@ -125,15 +169,145 @@ def invite(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
         )
-    token = result.get("token", "")
-    expires_at = result.get("expires_at")
-    # クライアントがリンクを組み立てやすいよう token と expires_at を返す
     return {
-        "token": token,
-        "expires_at": expires_at,
-        "email": result.get("email", body.email),
+        "id": str(result.get("id")),
+        "expires_at": result.get("expires_at"),
+        "email": invited.get("email", body.email),
+        "user_id": str(invited.get("id")),
         "role": result.get("role", body.role),
-        "signup_url_template": "/signup?token={token}",
+        "status": result.get("status", "pending"),
+    }
+
+
+@router.get("/invitations")
+def invitations_list(
+    current_user: Annotated[CurrentUser, Depends(require_org_admin)],
+):
+    """org_admin 向け。自組織の招待一覧。"""
+    org_id = require_organization_id(current_user)
+    rows = list_organization_invitations_for_admin(org_id)
+    return [
+        {
+            "id": str(row["id"]),
+            "organization_id": str(row["organization_id"]),
+            "user_id": str(row["user_id"]),
+            "role": row.get("role", "staff"),
+            "status": row.get("status", "pending"),
+            "expires_at": row.get("expires_at"),
+            "created_at": row.get("created_at"),
+        }
+        for row in rows
+    ]
+
+
+@router.get("/invitations/me")
+def my_invitations(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """ログインユーザー宛の pending 招待一覧。"""
+    rows = list_pending_invitations_for_user(current_user.id)
+    return [
+        {
+            "id": str(row["id"]),
+            "organization_id": str(row["organization_id"]),
+            "role": row.get("role", "staff"),
+            "status": row.get("status", "pending"),
+            "expires_at": row.get("expires_at"),
+            "created_at": row.get("created_at"),
+        }
+        for row in rows
+    ]
+
+
+@router.post("/invitations/{invitation_id}/accept")
+def accept_invitation(
+    invitation_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """ログインユーザーが自分宛招待を受諾し、組織所属する。"""
+    inv = get_invitation(invitation_id)
+    if not inv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_detail(CODE_NOT_FOUND, INVITATION_NOT_FOUND),
+        )
+    if str(inv.get("user_id")) != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_error_detail(CODE_FORBIDDEN, INVITATION_NOT_ALLOWED),
+        )
+    if inv.get("status") != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, INVITATION_NOT_ALLOWED),
+        )
+    if invitation_is_expired(inv):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_VALIDATION_ERROR, INVITATION_EXPIRED),
+        )
+    user = get_user_by_id(current_user.id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=_error_detail(CODE_USER_NOT_FOUND, INVITATION_USER_NOT_FOUND),
+        )
+    if user.get("organization_id"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, INVITATION_NOT_ALLOWED),
+        )
+    client = get_supabase()
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
+        )
+    org_id = str(inv["organization_id"])
+    updated_user_r = (
+        client.table("users")
+        .update(
+            {
+                "organization_id": org_id,
+                "role": inv.get("role", "staff"),
+                "token_version": int(user.get("token_version", 0)) + 1,
+            }
+        )
+        .eq("id", current_user.id)
+        .execute()
+    )
+    if not updated_user_r.data:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
+        )
+    if not mark_invitation_accepted(invitation_id):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
+        )
+    emp = get_employee_by_user_id(org_id, current_user.id)
+    if not emp:
+        user_full_name = " ".join(
+            [p for p in [user.get("first_name"), user.get("last_name")] if p]
+        ).strip()
+        fallback_name = user_full_name or (user.get("email") or "staff").split("@")[0]
+        create_employee_for_user(org_id, current_user.id, fallback_name)
+    audit_append(
+        org_id,
+        current_user.id,
+        EVENT_USER_ROLE_CHANGED,
+        {"role": inv.get("role", "staff")},
+    )
+    updated_user = updated_user_r.data[0]
+    tokens = build_token_response(updated_user)
+    return {
+        "status": "accepted",
+        "message": INVITATION_ACCEPTED,
+        "organization_id": org_id,
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
+        "token_type": tokens["token_type"],
     }
 
 

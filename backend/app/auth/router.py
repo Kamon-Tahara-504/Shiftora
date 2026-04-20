@@ -9,10 +9,10 @@ from app.auth.constants import (
     CODE_AUTH_NOT_CONFIGURED,
     CODE_EMAIL_ALREADY_REGISTERED,
     CODE_INVALID_CREDENTIALS,
-    CODE_INVALID_INVITATION,
     CODE_INVALID_TOKEN,
-    CODE_MAX_USERS_EXCEEDED,
-    CODE_SUBSCRIPTION_INACTIVE,
+    CODE_ORGANIZATION_ALREADY_SET,
+    CODE_SERVICE_TOKEN_INVALID,
+    CODE_USER_NOT_FOUND,
     CODE_VALIDATION_ERROR,
 )
 from app.auth.deps import CurrentUser, get_current_user
@@ -22,30 +22,31 @@ from app.audit.service import (
     EVENT_AUTH_LOGOUT,
     EVENT_AUTH_REFRESH_FAILED,
     EVENT_AUTH_REFRESH_SUCCEEDED,
+    EVENT_AUTH_REGISTER_USER_FAILED,
     EVENT_AUTH_REGISTER_ORG_FAILED,
     EVENT_AUTH_REGISTER_ORG_SUCCEEDED,
-    EVENT_AUTH_SIGNUP_FAILED,
-    EVENT_AUTH_SIGNUP_SUCCEEDED,
     EVENT_USER_ROLE_CHANGED,
     append as audit_append,
 )
 from app.auth.service import (
     build_token_response,
+    create_organization_for_user,
     get_user_by_email,
     login as do_login,
     logout as do_logout,
+    register_user as do_register_user,
     refresh_tokens,
-    register_org as do_register_org,
-    signup as do_signup,
 )
 from app.auth.jwt import decode_token
 from app.api_user_messages import (
     AUTH_NOT_CONFIGURED,
     INVALID_CREDENTIALS,
     INVALID_REQUEST,
+    ORGANIZATION_ALREADY_SET,
+    REGISTER_USER_COMPLETED,
+    REGISTER_USER_FAILED,
     REFRESH_FAILED,
-    REGISTRATION_FAILED,
-    SIGNUP_FAILED,
+    SERVICE_TOKEN_INVALID,
 )
 from app.config import get_settings
 
@@ -108,13 +109,14 @@ class RefreshRequest(BaseModel):
 
 class RegisterOrgRequest(BaseModel):
     organization_name: str = Field(..., min_length=1, description="組織名")
-    admin_email: EmailStr
-    password: str = Field(..., min_length=8, description="8文字以上")
+    service_token: str = Field(..., min_length=1, description="SaaS発行トークン")
 
 
-class SignupRequest(BaseModel):
-    """POST /auth/signup。招待トークンとパスワードでユーザー作成。"""
-    token: str = Field(..., min_length=1, description="招待トークン")
+class RegisterUserRequest(BaseModel):
+    """POST /auth/register-user。一般ユーザー登録。"""
+    first_name: str = Field(..., min_length=1, description="姓")
+    last_name: str = Field(..., min_length=1, description="名")
+    email: EmailStr
     password: str = Field(..., min_length=8, description="8文字以上")
 
 
@@ -126,6 +128,8 @@ def me(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     """
     return {
         "id": current_user.id,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
         "email": current_user.email,
         "organization_id": current_user.organization_id,
         "role": current_user.role,
@@ -222,94 +226,107 @@ def logout(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     return {"status": "ok"}
 
 
-@router.post("/register-org", status_code=status.HTTP_201_CREATED)
-def register_org(body: RegisterOrgRequest):
+@router.post("/register-user", status_code=status.HTTP_201_CREATED)
+def register_user(body: RegisterUserRequest):
     """
-    POST /auth/register-org（認証不要）
-    組織・org_admin・subscription を同時に作成。body: organization_name, admin_email, password。
+    POST /auth/register-user（認証不要）
+    一般ユーザーを作成。organization_id, role は未設定。
     """
-    _require_auth_configured()
-    user = do_register_org(
-        organization_name=body.organization_name.strip(),
-        admin_email=body.admin_email.strip().lower(),
-        password=body.password,
+    _require_jwt_configured()
+    user = do_register_user(
+        body.first_name,
+        body.last_name,
+        body.email.strip().lower(),
+        body.password,
     )
     if user is None:
         _log_auth_failure(
-            EVENT_AUTH_REGISTER_ORG_FAILED,
-            {"reason": "register_failed", "email_masked": _mask_email(body.admin_email)},
+            EVENT_AUTH_REGISTER_USER_FAILED,
+            {"reason": "register_failed", "email_masked": _mask_email(body.email)},
         )
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(CODE_EMAIL_ALREADY_REGISTERED, REGISTRATION_FAILED),
+            detail=_error_detail(CODE_EMAIL_ALREADY_REGISTERED, REGISTER_USER_FAILED),
         )
     tokens = build_token_response(user)
-    audit_append(
-        str(user["organization_id"]),
-        str(user["id"]),
-        EVENT_AUTH_REGISTER_ORG_SUCCEEDED,
-        {"email_masked": _mask_email(body.admin_email)},
-    )
+    # 未所属ユーザーは organization_id がないため監査ログには書かない。
     return {
-        "organization_id": str(user["organization_id"]),
+        "organization_id": None,
         "user_id": str(user["id"]),
         "access_token": tokens["access_token"],
         "refresh_token": tokens["refresh_token"],
         "token_type": tokens["token_type"],
+        "message": REGISTER_USER_COMPLETED,
     }
 
 
-@router.post("/signup", status_code=status.HTTP_201_CREATED)
-def signup(body: SignupRequest):
+@router.post("/register-org", status_code=status.HTTP_201_CREATED)
+def register_org(
+    body: RegisterOrgRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
     """
-    POST /auth/signup（認証不要）
-    招待トークンでパスワードを設定しユーザーを作成。body: { "token": "...", "password": "..." }。
-    max_users 超過時は 422（docs/06）。
+    POST /auth/register-org（認証必須）
+    ログイン済みユーザーが組織を作成し org_admin になる。service_token 必須。
     """
     _require_auth_configured()
-    user, error_code = do_signup(token=body.token.strip(), password=body.password)
+    user, error_code = create_organization_for_user(
+        user_id=current_user.id,
+        organization_name=body.organization_name.strip(),
+        service_token=body.service_token.strip(),
+    )
     if user is None:
-        _log_auth_failure(EVENT_AUTH_SIGNUP_FAILED, {"reason": error_code or "signup_failed"})
-        if error_code == "max_users_exceeded":
+        _log_auth_failure(EVENT_AUTH_REGISTER_ORG_FAILED, {"reason": error_code or "register_org_failed"})
+        if error_code == "service_token_invalid":
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=_error_detail(
-                    CODE_MAX_USERS_EXCEEDED,
-                    SIGNUP_FAILED,
+                    CODE_SERVICE_TOKEN_INVALID,
+                    SERVICE_TOKEN_INVALID,
                 ),
             )
-        if error_code == "subscription_inactive":
+        if error_code == "organization_already_set":
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=_error_detail(
-                    CODE_SUBSCRIPTION_INACTIVE,
-                    SIGNUP_FAILED,
-                ),
+                detail=_error_detail(CODE_ORGANIZATION_ALREADY_SET, ORGANIZATION_ALREADY_SET),
+            )
+        if error_code == "user_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=_error_detail(CODE_USER_NOT_FOUND, REGISTER_USER_FAILED),
             )
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(
-                CODE_INVALID_INVITATION,
-                SIGNUP_FAILED,
-            ),
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_VALIDATION_ERROR, REGISTER_USER_FAILED),
         )
-    audit_append(
-        str(user["organization_id"]),
-        str(user["id"]),
-        EVENT_AUTH_SIGNUP_SUCCEEDED,
-        {"role": user.get("role", "staff")},
-    )
-    audit_append(
-        str(user["organization_id"]),
-        str(user["id"]),
-        EVENT_USER_ROLE_CHANGED,
-        {"role": user.get("role", "staff")},
-    )
+    org_id = str(user["organization_id"]) if user.get("organization_id") else None
+    if org_id:
+        audit_append(
+            org_id,
+            current_user.id,
+            EVENT_AUTH_REGISTER_ORG_SUCCEEDED,
+            {"organization_name": body.organization_name.strip()},
+        )
+        audit_append(
+            org_id,
+            current_user.id,
+            EVENT_USER_ROLE_CHANGED,
+            {"role": user.get("role", "org_admin")},
+        )
     tokens = build_token_response(user)
     return {
         "user_id": str(user["id"]),
-        "organization_id": str(user["organization_id"]),
+        "organization_id": org_id,
         "access_token": tokens["access_token"],
         "refresh_token": tokens["refresh_token"],
         "token_type": tokens["token_type"],
     }
+
+
+@router.post("/signup", status_code=status.HTTP_410_GONE)
+def signup_disabled():
+    """旧招待トークン signup は廃止。"""
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=_error_detail(CODE_VALIDATION_ERROR, "この登録方法は現在利用できません。"),
+    )

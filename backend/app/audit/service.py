@@ -16,6 +16,8 @@ EVENT_AUTH_REFRESH_FAILED = "auth_refresh_failed"
 EVENT_AUTH_LOGOUT = "auth_logout"
 EVENT_AUTH_REGISTER_ORG_SUCCEEDED = "auth_register_org_succeeded"
 EVENT_AUTH_REGISTER_ORG_FAILED = "auth_register_org_failed"
+EVENT_AUTH_REGISTER_USER_SUCCEEDED = "auth_register_user_succeeded"
+EVENT_AUTH_REGISTER_USER_FAILED = "auth_register_user_failed"
 EVENT_AUTH_SIGNUP_SUCCEEDED = "auth_signup_succeeded"
 EVENT_AUTH_SIGNUP_FAILED = "auth_signup_failed"
 

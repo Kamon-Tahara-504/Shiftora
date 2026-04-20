@@ -16,6 +16,11 @@ INVALID_CREDENTIALS = "メールアドレスまたはパスワードが正しく
 REFRESH_FAILED = "セッションの更新に失敗しました。再度ログインしてください。"
 REGISTRATION_FAILED = "登録に失敗しました。入力内容を確認してください。"
 SIGNUP_FAILED = "アカウント作成に失敗しました。入力内容を確認してください。"
+REGISTER_USER_FAILED = "ユーザー登録に失敗しました。入力内容を確認してください。"
+REGISTER_USER_COMPLETED = "ユーザー登録が完了しました。"
+SERVICE_TOKEN_INVALID = "サービス登録トークンが無効です。"
+ORGANIZATION_ALREADY_SET = "このユーザーは既に組織に所属しています。"
+ORGANIZATION_CREATED = "組織の作成が完了しました。"
 
 # 権限
 FORBIDDEN = "この操作を実行する権限がありません。"
@@ -32,6 +37,12 @@ FAILED_GENERATE_SHIFTS = "シフト生成に失敗しました。時間をおい
 FAILED_CLEAR_SHIFTS = "既存シフトのクリアに失敗しました。時間をおいて再度お試しください。"
 FAILED_SAVE_SHIFTS = "シフトの保存に失敗しました。時間をおいて再度お試しください。"
 SHIFT_NOT_FOUND = "シフトが見つかりません。"
+INVITATION_USER_NOT_FOUND = "指定されたメールアドレスの登録ユーザーが見つかりません。"
+INVITATION_ALREADY_EXISTS = "このユーザーには既に招待を送信しています。"
+INVITATION_ACCEPTED = "招待を受諾しました。"
+INVITATION_NOT_FOUND = "招待が見つかりません。"
+INVITATION_EXPIRED = "この招待は期限切れです。"
+INVITATION_NOT_ALLOWED = "この招待は受諾できません。"
 
 # 職員
 ALREADY_REQUESTED_DAY_OFF = "同じ日付の希望休は既に申請済みです。"
