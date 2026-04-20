@@ -129,8 +129,8 @@ export default function OrganizationsAuditPage() {
             </div>
           </section>
 
-          <section className="rounded-2xl border border-primary/10 bg-white shadow-lg shadow-primary/5 overflow-hidden min-h-[calc(100vh-14rem)] flex flex-col">
-            <div className="px-6 py-4 border-b border-slate-100 bg-white/80">
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-[calc(100vh-14rem)] flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-200 bg-white">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-slate-700">組織監査一覧</p>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">

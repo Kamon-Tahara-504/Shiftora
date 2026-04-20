@@ -91,7 +91,7 @@ export default function AdminTokensPage() {
       <AdminSidebar />
       <main className="flex-1 h-screen overflow-y-auto bg-background-light p-4 md:p-8">
         <div className="mx-auto max-w-5xl space-y-6">
-          <div className="rounded-xl border border-primary/10 bg-white p-6 shadow-xl shadow-primary/5">
+          <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div>
               <h2 className="text-2xl font-bold">管理: サービス登録トークン</h2>
               <p className="mt-2 text-sm text-slate-500">組織作成用トークンを発行・一覧・失効できます。</p>
