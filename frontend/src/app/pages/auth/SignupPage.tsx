@@ -1,23 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Lock, KeyRound, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthAppHeader } from "@/components/auth/AuthAppHeader";
-import { ApiError, setStoredAuthTokens } from "@/lib/api";
-import { useAuth } from "@/hooks/useAuth";
-import { signup } from "@/services/authService";
-
-type SignupPageProps = {
-  token: string;
-};
+type SignupPageProps = { token: string };
 
 export default function SignupPage({ token }: SignupPageProps) {
   const router = useRouter();
-  const { refreshMe } = useAuth();
-  const [password, setPassword] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -25,38 +16,13 @@ export default function SignupPage({ token }: SignupPageProps) {
     event.preventDefault();
     setError(null);
 
-    if (!token) {
-      setError("招待トークンが見つかりません。招待リンクから再度アクセスしてください。");
-      return;
-    }
-    if (password.length < 8) {
-      setError("パスワードは8文字以上で入力してください。");
-      return;
-    }
-    if (password !== passwordConfirm) {
-      setError("パスワードと確認用パスワードが一致しません。");
+    if (!token.trim()) {
+      setError("このリンクは現在利用できません。");
       return;
     }
 
     setIsSubmitting(true);
-    try {
-      const result = await signup({ token, password });
-      setStoredAuthTokens({
-        access_token: result.access_token,
-        refresh_token: result.refresh_token,
-        token_type: result.token_type,
-      });
-      await refreshMe();
-      router.push("/my-shifts");
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError("登録に失敗しました。時間をおいて再度お試しください。");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    router.push("/register-org");
   }
 
   return (
@@ -70,56 +36,13 @@ export default function SignupPage({ token }: SignupPageProps) {
               <div className="text-center mb-10">
                 <h2 className="text-3xl font-bold text-slate-900 mb-3">パスワード設定</h2>
                 <p className="text-slate-500">
-                  招待を受け入れました。アカウントを利用するため、
+                  旧招待リンク方式は廃止されました。
                   <br />
-                  ログイン用のパスワードを設定してください。
+                  新しい登録フローからアカウント作成を行ってください。
                 </p>
               </div>
 
               <form className="space-y-6" onSubmit={handleSubmit}>
-                <div className="space-y-2">
-                  <label
-                    className="block text-sm font-semibold text-slate-700 ml-1"
-                    htmlFor="password"
-                  >
-                    パスワード
-                  </label>
-                  <div className="relative group">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors w-5 h-5" />
-                    <input
-                      className="w-full pl-12 pr-4 py-3.5 bg-background-light border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all text-slate-900 placeholder:text-slate-400"
-                      id="password"
-                      name="password"
-                      placeholder="8文字以上"
-                      type="password"
-                      required
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label
-                    className="block text-sm font-semibold text-slate-700 ml-1"
-                    htmlFor="password_confirm"
-                  >
-                    パスワード（確認）
-                  </label>
-                  <div className="relative group">
-                    <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors w-5 h-5" />
-                    <input
-                      className="w-full pl-12 pr-4 py-3.5 bg-background-light border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary transition-all text-slate-900 placeholder:text-slate-400"
-                      id="password_confirm"
-                      name="password_confirm"
-                      placeholder="もう一度入力"
-                      type="password"
-                      required
-                      value={passwordConfirm}
-                      onChange={(event) => setPasswordConfirm(event.target.value)}
-                    />
-                  </div>
-                </div>
                 {error ? (
                   <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     {error}
@@ -131,7 +54,7 @@ export default function SignupPage({ token }: SignupPageProps) {
                   type="submit"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "登録中..." : "パスワードを設定して登録完了"}
+                  {isSubmitting ? "遷移中..." : "新しい登録フローへ進む"}
                   <ArrowRight className="w-5 h-5" />
                 </button>
               </form>

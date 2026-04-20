@@ -5,7 +5,7 @@ import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { EmployeeCreateModal } from "@/components/org/EmployeeCreateModal";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
-import { ApiError, apiUrl } from "@/lib/api";
+import { ApiError } from "@/lib/api";
 import { useEmployees, type EmployeeStatus } from "@/hooks/useEmployees";
 import { useShifts } from "@/hooks/useShifts";
 import { inviteStaff } from "@/services/employeeService";
@@ -103,8 +103,7 @@ export default function EmployeesPage() {
     setIsInviting(true);
     try {
       const result = await inviteStaff({ email: inviteEmail.trim().toLowerCase() });
-      const signupUrl = apiUrl(result.signup_url_template.replace("{token}", result.token));
-      setInviteResult(signupUrl);
+      setInviteResult(`招待を作成しました（対象: ${result.email} / 有効期限: ${result.expires_at ?? "未設定"}）`);
       setInviteEmail("");
     } catch (err) {
       if (err instanceof ApiError) {
@@ -161,12 +160,12 @@ export default function EmployeesPage() {
           </div>
 
           <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
-            <h3 className="text-sm font-bold text-slate-800 mb-3">スタッフ招待</h3>
+            <h3 className="text-sm font-bold text-slate-800 mb-3">登録済みユーザー招待</h3>
             <form className="flex flex-col md:flex-row md:items-start gap-3" onSubmit={handleInvite}>
               <input
                 className="w-full md:max-w-md px-4 py-2.5 bg-background-light border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm"
                 type="email"
-                placeholder="staff@example.com"
+                placeholder="登録済みユーザーのメールアドレス"
                 value={inviteEmail}
                 onChange={(event) => setInviteEmail(event.target.value)}
                 required
@@ -176,7 +175,7 @@ export default function EmployeesPage() {
                 disabled={isInviting}
                 className="inline-flex items-center justify-center px-4 py-2.5 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 disabled:opacity-60"
               >
-                {isInviting ? "作成中..." : "招待リンクを作成"}
+                {isInviting ? "作成中..." : "招待を作成"}
               </button>
             </form>
             {inviteError ? (
@@ -186,7 +185,7 @@ export default function EmployeesPage() {
             ) : null}
             {inviteResult ? (
               <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                <p className="text-xs text-emerald-700">招待リンク</p>
+                <p className="text-xs text-emerald-700">招待作成結果</p>
                 <p className="mt-1 break-all text-xs text-slate-700">{inviteResult}</p>
               </div>
             ) : null}
