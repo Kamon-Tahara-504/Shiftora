@@ -5,7 +5,6 @@ import {
   CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Info,
 } from "lucide-react";
 import { StaffSidebar } from "@/components/staff/StaffSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
@@ -227,24 +226,14 @@ export default function MyShiftsPage() {
                               {s.slot}
                             </span>
                           </div>
-                          <h4 className="font-bold mb-1">{isDaycare ? "デイサービス勤務" : "訪問介護 (Home Care)"}</h4>
-                          <p className="text-xs text-slate-500 mb-3">{isDaycare ? "担当: フロア未定" : "担当利用者: 未定"}</p>
+                          <h4 className="font-bold mb-1">{isDaycare ? "デイサービス勤務" : "訪問介護勤務"}</h4>
+                          <p className="text-xs text-slate-500 mb-3">
+                            部門: {isDaycare ? "デイサービス" : "訪問介護"} / 時間帯: {s.slot}
+                          </p>
                         </div>
                       );
                     })
                   )}
-                </div>
-              </section>
-
-              <section className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
-                  <Info className="size-4 text-primary" />
-                  連絡事項
-                </h3>
-                <div className="space-y-3">
-                  <div className="p-2 bg-blue-50 border-l-4 border-blue-500 rounded text-xs">
-                    <p className="text-slate-600">連絡事項は現在ありません。</p>
-                  </div>
                 </div>
               </section>
             </div>
