@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Building2, KeyRound, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AuthAppHeader } from "@/components/auth/AuthAppHeader";
+import { OnboardingSidebar } from "@/components/auth/OnboardingSidebar";
 import { ApiError, setStoredAuthTokens } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { registerOrg } from "@/services/authService";
@@ -64,10 +64,9 @@ export default function CreateOrganizationPage() {
   }
 
   return (
-    <div className="bg-background-light font-display text-slate-900 min-h-screen flex flex-col">
-      <AuthAppHeader />
-
-      <main className="flex-grow flex items-center justify-center p-4 md:p-8">
+    <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
+      <OnboardingSidebar />
+      <main className="flex-1 h-screen overflow-y-auto bg-background-light flex items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-[520px]">
           <div className="bg-white rounded-xl shadow-xl shadow-primary/5 border border-primary/10 overflow-hidden">
             <div className="p-8 md:p-10">
