@@ -126,7 +126,7 @@ export default function InvitationsPage() {
           {error ? (
             <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
           ) : null}
-          <section className="rounded-2xl border border-primary/10 bg-white shadow-lg shadow-primary/5 overflow-hidden min-h-[calc(100vh-6.5rem)] flex flex-col">
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-[calc(100vh-6.5rem)] flex flex-col">
             <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
                 <h2 className="text-2xl font-bold">組織招待一覧</h2>
