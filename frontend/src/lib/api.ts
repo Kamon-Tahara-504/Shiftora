@@ -10,6 +10,32 @@ const TOKEN_TYPE_KEY = "shiftora_token_type";
 const UNAUTHORIZED_EVENT = "shiftora:unauthorized";
 let refreshInFlight: Promise<boolean> | null = null;
 
+function fallbackMessageByStatus(status: number): string {
+  switch (status) {
+    case 400:
+      return "リクエスト内容が不正です。";
+    case 401:
+      return "認証に失敗しました。再度ログインしてください。";
+    case 403:
+      return "この操作を実行する権限がありません。";
+    case 404:
+      return "対象データが見つかりません。";
+    case 409:
+      return "競合が発生しました。時間をおいて再度お試しください。";
+    case 422:
+      return "入力内容を確認してください。";
+    case 429:
+      return "リクエストが多すぎます。しばらく待ってから再度お試しください。";
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return "サーバーエラーが発生しました。時間をおいて再度お試しください。";
+    default:
+      return "通信に失敗しました。時間をおいて再度お試しください。";
+  }
+}
+
 export type AuthTokens = {
   access_token: string;
   refresh_token: string;
@@ -122,7 +148,7 @@ export async function parseApiError(response: Response): Promise<ApiError> {
   const message =
     detail?.message ??
     payload?.message ??
-    (response.statusText || "API request failed");
+    fallbackMessageByStatus(response.status);
   return new ApiError(
     response.status,
     message,
