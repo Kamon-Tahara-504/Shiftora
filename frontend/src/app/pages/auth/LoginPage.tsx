@@ -8,6 +8,8 @@ import { AuthAppHeader } from "@/components/auth/AuthAppHeader";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 
+const ADMIN_SYSTEM_ROLES = new Set(["super_admin", "support_admin"]);
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -23,6 +25,10 @@ export default function LoginPage() {
     setIsSubmitting(true);
     try {
       const me = await login({ email: email.trim(), password });
+      if (me.system_role && ADMIN_SYSTEM_ROLES.has(me.system_role)) {
+        router.push("/admin/tokens");
+        return;
+      }
       if (me.role === "org_admin") {
         router.push("/employees");
         return;

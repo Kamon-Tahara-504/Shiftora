@@ -20,6 +20,10 @@ EVENT_AUTH_REGISTER_USER_SUCCEEDED = "auth_register_user_succeeded"
 EVENT_AUTH_REGISTER_USER_FAILED = "auth_register_user_failed"
 EVENT_AUTH_SIGNUP_SUCCEEDED = "auth_signup_succeeded"
 EVENT_AUTH_SIGNUP_FAILED = "auth_signup_failed"
+EVENT_ADMIN_SERVICE_TOKEN_ISSUED = "admin_service_token_issued"
+EVENT_ADMIN_SERVICE_TOKEN_REVOKED = "admin_service_token_revoked"
+EVENT_ADMIN_SERVICE_TOKENS_LISTED = "admin_service_tokens_listed"
+EVENT_ADMIN_ORG_AUDIT_VIEWED = "admin_org_audit_viewed"
 
 
 def append(
@@ -43,6 +47,27 @@ def append(
     }
     try:
         supabase.table("audit_logs").insert(row).execute()
+        return True
+    except Exception:
+        return False
+
+
+def append_admin(
+    user_id: str,
+    event_type: str,
+    metadata: dict[str, Any] | None = None,
+) -> bool:
+    """運営admin操作の監査ログに 1 件追記する。"""
+    supabase = get_supabase()
+    if not supabase:
+        return False
+    row = {
+        "user_id": user_id,
+        "event_type": event_type,
+        "metadata": metadata or {},
+    }
+    try:
+        supabase.table("admin_audit_logs").insert(row).execute()
         return True
     except Exception:
         return False

@@ -7,7 +7,7 @@
 ```json
 {
   "code": "validation_error",
-  "message": "Invalid request",
+  "message": "入力内容を確認してください。",
   "details": {}
 }
 ```
@@ -52,7 +52,7 @@ REST API の実務的な標準にかなり近い。
 - `POST /org/invite` — body: `{ "email": "...", "role": "staff" }`
 - `GET /org/employees` — **デフォルトは is_active が true の職員のみ返す。** 無効も含めたい場合は `?include_inactive=true`。
 - `POST /org/employees`
-- `POST /org/shifts/generate` — リクエスト: `{ "year": 2026, "month": 4 }`。レスポンスは `{ "status": "ok" }` のみ。実データは GET /org/shifts で取得。同一組織で生成中なら **409 Conflict**。**過去月は禁止**（422, `code: "invalid_period"`, `message: "Cannot generate shifts for past months"`）。将来 `force=true` で拡張可。
+- `POST /org/shifts/generate` — リクエスト: `{ "year": 2026, "month": 4 }`。レスポンスは `{ "status": "ok" }` のみ。実データは GET /org/shifts で取得。同一組織で生成中なら **409 Conflict**。**過去月は禁止**（422, `code: "invalid_period"`, `message: "過去月のシフトは生成できません。"`）。将来 `force=true` で拡張可。
 - `GET /org/shifts` — クエリ **year, month 必須**。**各要素に必ず `id`（shift の PK）を含める。** 例: `[{ "id": "shift_uuid", "date": "2026-04-01", "slot": "AM", "department": "daycare", "employee_id": "emp_1" }, ...]`
 - `PATCH /org/shifts/{shift_id}` — 手動修正。更新可: `employee_id`, `department`, `slot`。
 
