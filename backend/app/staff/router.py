@@ -21,7 +21,7 @@ from app.auth.constants import (
 from app.auth.deps import CurrentUser
 from app.auth.rbac import require_staff
 from app.auth.rbac import require_organization_id
-from app.org.employees import get_employee_by_user_id
+from app.org.employees import create_employee_for_user, get_employee_by_user_id
 from app.org.shifts import list_shifts_in_range
 from app.staff.day_offs import (
     create_day_off,
@@ -45,6 +45,13 @@ def _get_staff_employee_id(current_user: CurrentUser) -> str:
         org_id,
         current_user.id,
     )
+    if not emp:
+        # 過去データや移行直後で employees 未作成の場合は self-healing で補完する。
+        full_name = " ".join(
+            [p for p in [current_user.first_name, current_user.last_name] if p]
+        ).strip()
+        fallback_name = full_name or (current_user.email or "staff").split("@")[0]
+        emp = create_employee_for_user(org_id, current_user.id, fallback_name)
     if not emp:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

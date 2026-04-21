@@ -4,6 +4,7 @@ import {
   CalendarDays,
   CalendarCheck,
   PlaneTakeoff,
+  List,
   LogOut,
   User,
 } from "lucide-react";
@@ -19,6 +20,7 @@ export function StaffSidebar() {
   const navItems = [
     { href: "/my-shifts", label: "自分のシフト", Icon: CalendarCheck },
     { href: "/day-offs", label: "希望休", Icon: PlaneTakeoff },
+    { href: "/members", label: "メンバー一覧", Icon: List },
   ];
 
   const memberships = user?.memberships?.filter((m) => m.status === "active") ?? [];

@@ -104,6 +104,18 @@ export type OrganizationAuditItem = {
   created_at: string;
 };
 
+export type OrganizationMember = {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  membership_role: "org_admin" | "staff" | null;
+  membership_status: "active" | "suspended" | "left";
+  is_default: boolean;
+  joined_at: string | null;
+  is_active: boolean;
+};
+
 export async function fetchMe(): Promise<AuthUser> {
   const response = await apiFetch("/auth/me");
   if (!response.ok) {
@@ -228,4 +240,12 @@ export async function adminListOrganizationAudit(): Promise<OrganizationAuditIte
     throw await parseApiError(response);
   }
   return (await response.json()) as OrganizationAuditItem[];
+}
+
+export async function getOrganizationMembers(): Promise<OrganizationMember[]> {
+  const response = await apiFetch("/org/members");
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+  return (await response.json()) as OrganizationMember[];
 }
