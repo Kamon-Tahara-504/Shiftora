@@ -5,6 +5,7 @@ import { Mail, Lock, ArrowRight, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthAppHeader } from "@/components/auth/AuthAppHeader";
+import { useToast } from "@/context/ToastContext";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -12,16 +13,15 @@ const ADMIN_SYSTEM_ROLES = new Set(["super_admin", "support_admin"]);
 
 export default function LoginPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
     setIsSubmitting(true);
     try {
       const me = await login({ email: email.trim(), password });
@@ -40,9 +40,9 @@ export default function LoginPage() {
       router.push("/invitations");
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        showToast(err.message, { variant: "error" });
       } else {
-        setError("ログインに失敗しました。しばらくしてから再度お試しください。");
+        showToast("ログインに失敗しました。しばらくしてから再度お試しください。", { variant: "error" });
       }
     } finally {
       setIsSubmitting(false);
@@ -130,12 +130,6 @@ export default function LoginPage() {
                     </button>
                   </div>
                 </div>
-
-                {error ? (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {error}
-                  </p>
-                ) : null}
 
                 <button
                   className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-primary/20 mt-4 flex items-center justify-center gap-2"
