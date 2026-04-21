@@ -1,6 +1,6 @@
  "use client";
 
-import { CalendarDays, Users, Sparkles, CalendarCheck, User, LogOut } from "lucide-react";
+import { CalendarDays, Users, Sparkles, CalendarCheck, User, LogOut, List } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
@@ -25,6 +25,11 @@ export function OrgSidebar() {
       href: "/shift/calendar",
       label: "シフトカレンダー",
       Icon: CalendarCheck,
+    },
+    {
+      href: "/members",
+      label: "メンバー一覧",
+      Icon: List,
     },
   ];
 
