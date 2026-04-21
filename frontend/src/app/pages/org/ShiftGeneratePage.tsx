@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
@@ -12,20 +12,35 @@ import { useEmployees } from "@/hooks/useEmployees";
 export default function ShiftGeneratePage() {
   const router = useRouter();
   const { showToast } = useToast();
-  const { isGenerating, error, infeasibleData, triggerGeneration } = useShiftGeneration();
+  const { isGenerating, error, infeasibleData, triggerGeneration, clearFeedback } = useShiftGeneration();
   const { employees } = useEmployees();
-  
+
   const today = new Date();
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const yearOptions = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1];
+  const activeStaffCount = useMemo(
+    () => employees.filter((employee) => employee.status === "active").length,
+    [employees],
+  );
+  const canGenerate = activeStaffCount > 0 && !isGenerating;
+  const missingSlotsPreview = infeasibleData?.missing_slots.slice(0, 20) ?? [];
 
   useEffect(() => {
     if (!error) return;
-    const missingCount = infeasibleData?.missing_slots.length ?? 0;
-    const detail = missingCount > 0 ? ` 不足枠: ${missingCount}件` : "";
-    showToast(`${error}${detail}`, { variant: "error", durationMs: 5000 });
+    if (infeasibleData) {
+      showToast("シフトを生成できませんでした。ページ下部の不足枠を確認してください。", {
+        variant: "error",
+        durationMs: 5000,
+      });
+      return;
+    }
+    showToast(error, { variant: "error", durationMs: 5000 });
   }, [error, infeasibleData, showToast]);
+
+  useEffect(() => {
+    clearFeedback();
+  }, [selectedYear, selectedMonth, clearFeedback]);
 
   const handleGenerate = async () => {
     const success = await triggerGeneration(selectedYear, selectedMonth);
@@ -47,7 +62,7 @@ export default function ShiftGeneratePage() {
               <button
                 type="button"
                 onClick={handleGenerate}
-                disabled={isGenerating}
+                disabled={!canGenerate}
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white text-sm md:text-base font-bold rounded-full hover:bg-primary/90 transition-all shadow-sm shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Zap className={`size-5 md:size-6 ${isGenerating ? "animate-pulse" : ""}`} />
@@ -64,8 +79,10 @@ export default function ShiftGeneratePage() {
                 </span>
                 <Users className="size-4 text-primary" />
               </div>
-              <p className="text-xl font-bold">{employees.filter(e => e.status === "active").length} 名</p>
-              <p className="text-sm text-slate-500">スケジューリング準備完了</p>
+              <p className="text-xl font-bold">{activeStaffCount} 名</p>
+              <p className="text-sm text-slate-500">
+                {activeStaffCount > 0 ? "スケジューリング準備完了" : "職員管理で有効職員を設定してください"}
+              </p>
             </div>
           </section>
 
@@ -118,13 +135,16 @@ export default function ShiftGeneratePage() {
                   <ul className="space-y-2 text-sm text-slate-600">
                     <li className="flex justify-between">
                       <span>対象スタッフ数:</span>
-                      <span className="font-medium text-slate-900">{employees.filter(e => e.status === "active").length} 名</span>
+                      <span className="font-medium text-slate-900">{activeStaffCount} 名</span>
                     </li>
                     <li className="flex justify-between">
                       <span>対象期間:</span>
                       <span className="font-medium text-slate-900">{selectedYear}年{selectedMonth}月</span>
                     </li>
                   </ul>
+                  <p className="mt-4 text-xs text-slate-500 leading-relaxed">
+                    希望休はスタッフが希望休画面から事前に申請してください。申請済みの希望休は生成時に考慮されます。
+                  </p>
                 </div>
               </div>
 
@@ -132,7 +152,7 @@ export default function ShiftGeneratePage() {
                 <button
                   type="button"
                   onClick={handleGenerate}
-                  disabled={isGenerating}
+                  disabled={!canGenerate}
                   className="w-full md:w-auto px-12 py-4 bg-primary text-white font-bold rounded-xl shadow-lg shadow-primary/25 hover:bg-primary/90 transition-all active:scale-95 flex items-center justify-center gap-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Zap className={`size-6 ${isGenerating ? "animate-pulse" : ""}`} />
@@ -141,9 +161,60 @@ export default function ShiftGeneratePage() {
                 <p className="text-xs text-slate-400 text-center">
                   注：これはシフトを即座に公開するものではありません。生成後カレンダーで確認・修正できます。
                 </p>
+                {!canGenerate ? (
+                  <p className="text-xs text-amber-700 text-center">
+                    有効なスタッフがいないため、シフトを生成できません。
+                  </p>
+                ) : null}
               </div>
             </div>
           </section>
+
+          {infeasibleData ? (
+            <section className="mt-8 bg-white rounded-xl border border-rose-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-rose-100 bg-rose-50/60">
+                <h3 className="text-base font-bold text-rose-800">不足枠の確認</h3>
+                <p className="mt-1 text-xs text-rose-700">
+                  条件を満たせない枠が {infeasibleData.missing_slots.length} 件あります。
+                </p>
+              </div>
+              <div className="p-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="py-2 text-xs font-bold text-slate-500">日付</th>
+                        <th className="py-2 text-xs font-bold text-slate-500">時間帯</th>
+                        <th className="py-2 text-xs font-bold text-slate-500">部署</th>
+                        <th className="py-2 text-xs font-bold text-slate-500 text-right">不足人数</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {missingSlotsPreview.map((slot) => (
+                        <tr key={`${slot.date}-${slot.slot}-${slot.department}`}>
+                          <td className="py-2 text-sm text-slate-700">{slot.date}</td>
+                          <td className="py-2 text-sm text-slate-700">
+                            {slot.slot === "AM" ? "午前" : "午後"}
+                          </td>
+                          <td className="py-2 text-sm text-slate-700">
+                            {slot.department === "daycare" ? "デイサービス" : "訪問介護"}
+                          </td>
+                          <td className="py-2 text-sm text-slate-900 font-semibold text-right">
+                            {Math.max(slot.required - slot.assigned, 0)}名
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {infeasibleData.missing_slots.length > missingSlotsPreview.length ? (
+                  <p className="mt-3 text-xs text-slate-500">
+                    他 {infeasibleData.missing_slots.length - missingSlotsPreview.length} 件の不足枠があります。
+                  </p>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
         </div>
       </main>

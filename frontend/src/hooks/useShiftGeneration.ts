@@ -5,6 +5,10 @@ export function useShiftGeneration() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infeasibleData, setInfeasibleData] = useState<ShiftInfeasibleResponse | null>(null);
+  const clearFeedback = useCallback(() => {
+    setError(null);
+    setInfeasibleData(null);
+  }, []);
 
   const triggerGeneration = useCallback(async (year: number, month: number) => {
     setIsGenerating(true);
@@ -31,5 +35,6 @@ export function useShiftGeneration() {
     error,
     infeasibleData,
     triggerGeneration,
+    clearFeedback,
   };
 }
