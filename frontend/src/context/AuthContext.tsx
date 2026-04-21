@@ -13,7 +13,12 @@ import {
   setStoredAuthTokens,
   unauthorizedEventName,
 } from "@/lib/api";
-import { fetchMe, login as loginRequest, logout as logoutRequest } from "@/services/authService";
+import {
+  fetchMe,
+  login as loginRequest,
+  logout as logoutRequest,
+  switchOrg as switchOrgRequest,
+} from "@/services/authService";
 
 export type AuthUser = {
   id: string;
@@ -23,6 +28,14 @@ export type AuthUser = {
   organization_id: string | null;
   role: "org_admin" | "staff" | null;
   system_role: string | null;
+  active_organization_id: string | null;
+  memberships: {
+    organization_id: string;
+    role: "org_admin" | "staff" | null;
+    status: "active" | "suspended" | "left";
+    is_default: boolean;
+    joined_at: string | null;
+  }[];
 };
 
 type LoginInput = {
@@ -36,6 +49,7 @@ type AuthContextValue = {
   login: (input: LoginInput) => Promise<AuthUser>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<AuthUser | null>;
+  switchOrganization: (organizationId: string) => Promise<AuthUser>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -74,6 +88,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const switchOrganization = useCallback(async (organizationId: string): Promise<AuthUser> => {
+    const result = await switchOrgRequest({ organization_id: organizationId });
+    setStoredAuthTokens({
+      access_token: result.access_token,
+      refresh_token: result.refresh_token,
+      token_type: result.token_type,
+    });
+    const me = await fetchMe();
+    setUser(me);
+    return me;
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     async function bootstrapAuth() {
@@ -110,8 +136,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       refreshMe,
+      switchOrganization,
     }),
-    [isLoading, login, logout, refreshMe, user],
+    [isLoading, login, logout, refreshMe, switchOrganization, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
