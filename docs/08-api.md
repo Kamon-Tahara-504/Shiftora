@@ -30,10 +30,11 @@ REST API の実務的な標準にかなり近い。
 
 ## Auth
 
-- `GET /auth/me` — 認証必須。現在のユーザー情報（id, email, organization_id, role, system_role）を返す。
+- `GET /auth/me` — 認証必須。現在のユーザー情報（id, email, organization_id, role, system_role, active_organization_id, memberships[]）を返す。
 - `POST /auth/login`
 - `POST /auth/refresh`
 - `POST /auth/logout`
+- `POST /auth/switch-org` — body: `{ "organization_id": "..." }`。所属済み組織間でアクティブ組織を切り替え、新しいトークンを返す。
 - `POST /auth/signup` — 招待受け入れ・パスワード設定。body: `{ "token": "...", "password": "..." }`。サーバーは **token 検証 → users 作成 → employees と紐付け** のみ行う。
 - `POST /auth/register-org` — 組織と org_admin を同時に作る。body: `{ "organization_name": "...", "admin_email": "...", "password": "..." }`。詳細は [05-auth-and-invitation.md](05-auth-and-invitation.md) 参照。
 
