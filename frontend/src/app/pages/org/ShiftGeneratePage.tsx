@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
-import { Info, Users, Zap, AlertCircle } from "lucide-react";
+import { Info, Users, Zap } from "lucide-react";
+import { useToast } from "@/context/ToastContext";
 import { useShiftGeneration } from "@/hooks/useShiftGeneration";
 import { useEmployees } from "@/hooks/useEmployees";
 
 export default function ShiftGeneratePage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const { isGenerating, error, infeasibleData, triggerGeneration } = useShiftGeneration();
   const { employees } = useEmployees();
   
@@ -17,6 +19,13 @@ export default function ShiftGeneratePage() {
   const [selectedYear, setSelectedYear] = useState(today.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
   const yearOptions = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1];
+
+  useEffect(() => {
+    if (!error) return;
+    const missingCount = infeasibleData?.missing_slots.length ?? 0;
+    const detail = missingCount > 0 ? ` 不足枠: ${missingCount}件` : "";
+    showToast(`${error}${detail}`, { variant: "error", durationMs: 5000 });
+  }, [error, infeasibleData, showToast]);
 
   const handleGenerate = async () => {
     const success = await triggerGeneration(selectedYear, selectedMonth);
@@ -46,28 +55,6 @@ export default function ShiftGeneratePage() {
               </button>
             }
           />
-
-          {error && (
-            <div className="mb-8 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
-              <AlertCircle className="size-5 text-red-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="text-sm font-bold text-red-800">{error}</p>
-                {infeasibleData && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-xs text-red-700 font-medium">不足している枠:</p>
-                    <ul className="text-xs text-red-600 list-disc list-inside">
-                      {infeasibleData.missing_slots.map((slot, i) => (
-                        <li key={i}>
-                          {slot.date} ({slot.slot}): {slot.department === "daycare" ? "デイサービス" : "訪問介護"} 
-                          - 必要: {slot.required}名 / 割当: {slot.assigned}名
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">

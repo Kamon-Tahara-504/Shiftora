@@ -4,15 +4,16 @@ import { useEffect, useState } from "react";
 import { Building2, CalendarClock, CheckCircle2, Inbox, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { OnboardingSidebar } from "@/components/auth/OnboardingSidebar";
+import { useToast } from "@/context/ToastContext";
 import { ApiError, setStoredAuthTokens } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { acceptInvitation, getMyInvitations, type UserInvitation } from "@/services/authService";
 
 export default function InvitationsPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const { user, isLoading, refreshMe } = useAuth();
   const [items, setItems] = useState<UserInvitation[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
@@ -32,22 +33,20 @@ export default function InvitationsPage() {
     }
     async function load() {
       setLoading(true);
-      setError(null);
       try {
         const list = await getMyInvitations();
         setItems(list);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "招待一覧の取得に失敗しました。");
+        showToast(err instanceof Error ? err.message : "招待一覧の取得に失敗しました。", { variant: "error" });
       } finally {
         setLoading(false);
       }
     }
     load();
-  }, [isLoading, router, user]);
+  }, [isLoading, router, user, showToast]);
 
   async function onAccept(invitationId: string) {
     setAcceptingId(invitationId);
-    setError(null);
     try {
       const result = await acceptInvitation(invitationId);
       setStoredAuthTokens({
@@ -59,9 +58,9 @@ export default function InvitationsPage() {
       router.push("/my-shifts");
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        showToast(err.message, { variant: "error" });
       } else {
-        setError("招待の受諾に失敗しました。");
+        showToast("招待の受諾に失敗しました。", { variant: "error" });
       }
     } finally {
       setAcceptingId(null);
@@ -123,10 +122,7 @@ export default function InvitationsPage() {
       <OnboardingSidebar />
       <main className="flex-1 h-screen overflow-y-auto bg-background-light p-4 md:p-8">
         <div className="mx-auto max-w-5xl pt-2">
-          {error ? (
-            <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
-          ) : null}
-          <section className="rounded-2xl border border-primary/10 bg-white shadow-lg shadow-primary/5 overflow-hidden min-h-[calc(100vh-6.5rem)] flex flex-col">
+          <section className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden min-h-[calc(100vh-6.5rem)] flex flex-col">
             <div className="px-6 py-5 border-b border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="space-y-1">
                 <h2 className="text-2xl font-bold">組織招待一覧</h2>

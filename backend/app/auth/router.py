@@ -8,6 +8,8 @@ from pydantic import BaseModel, EmailStr, Field
 from app.auth.constants import (
     CODE_AUTH_NOT_CONFIGURED,
     CODE_EMAIL_ALREADY_REGISTERED,
+    CODE_FORBIDDEN,
+    CODE_INTERNAL_ERROR,
     CODE_INVALID_CREDENTIALS,
     CODE_INVALID_TOKEN,
     CODE_ORGANIZATION_ALREADY_SET,
@@ -32,6 +34,8 @@ from app.auth.service import (
     build_token_response,
     create_organization_for_user,
     get_user_by_email,
+    list_user_memberships,
+    switch_active_organization_for_user,
     login as do_login,
     logout as do_logout,
     register_user as do_register_user,
@@ -40,6 +44,7 @@ from app.auth.service import (
 from app.auth.jwt import decode_token
 from app.api_user_messages import (
     AUTH_NOT_CONFIGURED,
+    FORBIDDEN,
     INVALID_CREDENTIALS,
     INVALID_REQUEST,
     ORGANIZATION_ALREADY_SET,
@@ -120,12 +125,50 @@ class RegisterUserRequest(BaseModel):
     password: str = Field(..., min_length=8, description="8文字以上")
 
 
+class SwitchOrgRequest(BaseModel):
+    organization_id: str = Field(..., min_length=1, description="切替先の organization_id")
+
+
 @router.get("/me")
 def me(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
     """
     GET /auth/me
     認証必須。現在のユーザー情報を返す（id, email, organization_id, role, system_role）。
     """
+    memberships = [
+        {
+            "organization_id": str(row["organization_id"]),
+            "role": row.get("role"),
+            "status": row.get("status"),
+            "is_default": bool(row.get("is_default", False)),
+            "joined_at": row.get("joined_at"),
+        }
+        for row in list_user_memberships(current_user.id)
+        if row.get("organization_id")
+    ]
+    if not memberships and current_user.organization_id and current_user.role:
+        # Phase 2 互換: 旧 users.organization_id / role から擬似 membership を返す。
+        memberships = [
+            {
+                "organization_id": current_user.organization_id,
+                "role": current_user.role,
+                "status": "active",
+                "is_default": True,
+                "joined_at": None,
+            }
+        ]
+    default_membership = next(
+        (
+            m for m in memberships
+            if m.get("is_default") and m.get("status") == "active"
+        ),
+        None,
+    )
+    active_organization_id = (
+        str(default_membership["organization_id"])
+        if default_membership
+        else current_user.organization_id
+    )
     return {
         "id": current_user.id,
         "first_name": current_user.first_name,
@@ -134,6 +177,55 @@ def me(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
         "organization_id": current_user.organization_id,
         "role": current_user.role,
         "system_role": current_user.system_role,
+        "active_organization_id": active_organization_id,
+        "memberships": memberships,
+    }
+
+
+@router.post("/switch-org")
+def switch_org(
+    body: SwitchOrgRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """
+    POST /auth/switch-org（認証必須）
+    body: { "organization_id": "..." }
+    active 組織を切り替え、users の organization_id/role を互換用に更新する。
+    """
+    _require_auth_configured()
+    next_org_id = body.organization_id.strip()
+    if not next_org_id:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=_error_detail(CODE_VALIDATION_ERROR, INVALID_REQUEST),
+        )
+    user, error_code = switch_active_organization_for_user(
+        user_id=current_user.id,
+        organization_id=next_org_id,
+    )
+    if user is None:
+        if error_code in {"membership_not_found", "membership_inactive"}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=_error_detail(CODE_FORBIDDEN, FORBIDDEN),
+            )
+        if error_code == "user_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=_error_detail(CODE_USER_NOT_FOUND, REGISTER_USER_FAILED),
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, REGISTER_USER_FAILED),
+        )
+    tokens = build_token_response(user)
+    return {
+        "user_id": str(user["id"]),
+        "organization_id": str(user["organization_id"]) if user.get("organization_id") else None,
+        "role": user.get("role"),
+        "access_token": tokens["access_token"],
+        "refresh_token": tokens["refresh_token"],
+        "token_type": tokens["token_type"],
     }
 
 

@@ -5,19 +5,18 @@ import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthAppHeader } from "@/components/auth/AuthAppHeader";
+import { useToast } from "@/context/ToastContext";
 type SignupPageProps = { token: string };
 
 export default function SignupPage({ token }: SignupPageProps) {
   const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
+  const { showToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
-
     if (!token.trim()) {
-      setError("このリンクは現在利用できません。");
+      showToast("このリンクは現在利用できません。", { variant: "error" });
       return;
     }
 
@@ -31,7 +30,7 @@ export default function SignupPage({ token }: SignupPageProps) {
 
       <main className="flex-grow flex items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-[520px]">
-          <div className="bg-white rounded-xl shadow-xl shadow-primary/5 border border-primary/10 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-8 md:p-10">
               <div className="text-center mb-10">
                 <h2 className="text-3xl font-bold text-slate-900 mb-3">パスワード設定</h2>
@@ -43,12 +42,6 @@ export default function SignupPage({ token }: SignupPageProps) {
               </div>
 
               <form className="space-y-6" onSubmit={handleSubmit}>
-                {error ? (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {error}
-                  </p>
-                ) : null}
-
                 <button
                   className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-primary/20 mt-4 flex items-center justify-center gap-2"
                   type="submit"

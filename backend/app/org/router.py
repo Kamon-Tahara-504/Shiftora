@@ -40,7 +40,14 @@ from app.auth.constants import (
 )
 from app.auth.deps import CurrentUser, get_current_user
 from app.auth.rbac import require_org_admin, require_organization_id
-from app.auth.service import build_token_response, get_user_by_email, get_user_by_id
+from app.auth.service import (
+    build_token_response,
+    get_user_by_email,
+    get_user_by_id,
+    list_user_memberships,
+    set_default_membership,
+    upsert_user_membership,
+)
 from app.config import get_settings
 from app.db import get_supabase
 from app.org.employees import (
@@ -135,16 +142,14 @@ def invite(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(CODE_USER_NOT_FOUND, INVITATION_USER_NOT_FOUND),
         )
-    invited_org_id = invited.get("organization_id")
-    if invited_org_id and str(invited_org_id) == org_id:
+    invited_memberships = list_user_memberships(str(invited["id"]))
+    if any(
+        str(m.get("organization_id")) == org_id and m.get("status") == "active"
+        for m in invited_memberships
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, INVITATION_ALREADY_EXISTS),
-        )
-    if invited_org_id and str(invited_org_id) != org_id:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, "他組織に所属中のユーザーは招待できません。"),
         )
     result, err = create_organization_invitation(
         organization_id=org_id,
@@ -252,7 +257,12 @@ def accept_invitation(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=_error_detail(CODE_USER_NOT_FOUND, INVITATION_USER_NOT_FOUND),
         )
-    if user.get("organization_id"):
+    memberships = list_user_memberships(current_user.id)
+    if any(
+        str(m.get("organization_id")) == str(inv.get("organization_id"))
+        and m.get("status") == "active"
+        for m in memberships
+    ):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=_error_detail(CODE_INVITATION_ALREADY_EXISTS, INVITATION_NOT_ALLOWED),
@@ -264,6 +274,22 @@ def accept_invitation(
             detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
         )
     org_id = str(inv["organization_id"])
+    if not upsert_user_membership(
+        user_id=current_user.id,
+        organization_id=org_id,
+        role=inv.get("role", "staff"),
+        status="active",
+        is_default=True,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
+        )
+    if not set_default_membership(current_user.id, org_id):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
+        )
     updated_user_r = (
         client.table("users")
         .update(

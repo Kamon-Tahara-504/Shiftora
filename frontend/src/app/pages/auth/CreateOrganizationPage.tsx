@@ -5,16 +5,17 @@ import { Building2, KeyRound, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { OnboardingSidebar } from "@/components/auth/OnboardingSidebar";
+import { useToast } from "@/context/ToastContext";
 import { ApiError, setStoredAuthTokens } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { registerOrg } from "@/services/authService";
 
 export default function CreateOrganizationPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const { user, isLoading, refreshMe } = useAuth();
   const [organizationName, setOrganizationName] = useState("");
   const [serviceToken, setServiceToken] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -30,13 +31,12 @@ export default function CreateOrganizationPage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
     if (!organizationName.trim()) {
-      setError("組織名を入力してください。");
+      showToast("組織名を入力してください。", { variant: "error" });
       return;
     }
     if (!serviceToken.trim()) {
-      setError("サービス登録トークンを入力してください。");
+      showToast("サービス登録トークンを入力してください。", { variant: "error" });
       return;
     }
     setIsSubmitting(true);
@@ -54,9 +54,9 @@ export default function CreateOrganizationPage() {
       router.push("/employees");
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        showToast(err.message, { variant: "error" });
       } else {
-        setError("組織作成に失敗しました。時間をおいて再度お試しください。");
+        showToast("組織作成に失敗しました。時間をおいて再度お試しください。", { variant: "error" });
       }
     } finally {
       setIsSubmitting(false);
@@ -68,7 +68,7 @@ export default function CreateOrganizationPage() {
       <OnboardingSidebar />
       <main className="flex-1 h-screen overflow-y-auto bg-background-light flex items-center justify-center p-4 md:p-8">
         <div className="w-full max-w-[520px]">
-          <div className="bg-white rounded-xl shadow-xl shadow-primary/5 border border-primary/10 overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-8 md:p-10">
               <div className="text-center mb-10">
                 <h2 className="text-3xl font-bold text-slate-900 mb-3">組織作成</h2>
@@ -117,12 +117,6 @@ export default function CreateOrganizationPage() {
                     />
                   </div>
                 </div>
-
-                {error ? (
-                  <p className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {error}
-                  </p>
-                ) : null}
 
                 <button
                   className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 px-6 rounded-lg transition-all transform active:scale-[0.98] shadow-lg shadow-primary/20 mt-4 flex items-center justify-center gap-2"

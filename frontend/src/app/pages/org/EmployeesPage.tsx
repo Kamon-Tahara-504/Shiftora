@@ -5,6 +5,7 @@ import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { EmployeeCreateModal } from "@/components/org/EmployeeCreateModal";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
+import { useToast } from "@/context/ToastContext";
 import { ApiError } from "@/lib/api";
 import { useEmployees, type EmployeeStatus } from "@/hooks/useEmployees";
 import { useShifts } from "@/hooks/useShifts";
@@ -57,11 +58,10 @@ function StatusBadge({ status }: { status: EmployeeStatus }) {
 }
 
 export default function EmployeesPage() {
+  const { showToast } = useToast();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteResult, setInviteResult] = useState<string | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [isInviting, setIsInviting] = useState(false);
   const { employees, isLoading, error, addEmployee, patchEmployee, refresh } = useEmployees();
   const { shifts, fetchShifts } = useShifts();
@@ -87,6 +87,11 @@ export default function EmployeesPage() {
     fetchShifts(now.getFullYear(), now.getMonth() + 1);
   }, [fetchShifts]);
 
+  useEffect(() => {
+    if (!error) return;
+    showToast(error, { variant: "error" });
+  }, [error, showToast]);
+
   function initials(name: string): string {
     const parts = name.trim().split(/\s+/).filter(Boolean);
     return parts.slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "NA";
@@ -94,22 +99,22 @@ export default function EmployeesPage() {
 
   async function handleInvite(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setInviteError(null);
-    setInviteResult(null);
     if (!inviteEmail.trim()) {
-      setInviteError("招待先メールアドレスを入力してください。");
+      showToast("招待先メールアドレスを入力してください。", { variant: "error" });
       return;
     }
     setIsInviting(true);
     try {
       const result = await inviteStaff({ email: inviteEmail.trim().toLowerCase() });
-      setInviteResult(`招待を作成しました（対象: ${result.email} / 有効期限: ${result.expires_at ?? "未設定"}）`);
+      showToast(`招待を作成しました（対象: ${result.email} / 有効期限: ${result.expires_at ?? "未設定"}）`, {
+        variant: "success",
+      });
       setInviteEmail("");
     } catch (err) {
       if (err instanceof ApiError) {
-        setInviteError(err.message);
+        showToast(err.message, { variant: "error" });
       } else {
-        setInviteError("招待の作成に失敗しました。");
+        showToast("招待の作成に失敗しました。", { variant: "error" });
       }
     } finally {
       setIsInviting(false);
@@ -178,25 +183,9 @@ export default function EmployeesPage() {
                 {isInviting ? "作成中..." : "招待を作成"}
               </button>
             </form>
-            {inviteError ? (
-              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {inviteError}
-              </p>
-            ) : null}
-            {inviteResult ? (
-              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                <p className="text-xs text-emerald-700">招待作成結果</p>
-                <p className="mt-1 break-all text-xs text-slate-700">{inviteResult}</p>
-              </div>
-            ) : null}
           </section>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {error ? (
-              <div className="mx-6 mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {error}
-              </div>
-            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>

@@ -8,6 +8,14 @@ export type AuthUser = {
   organization_id: string | null;
   role: "org_admin" | "staff" | null;
   system_role: string | null;
+  active_organization_id: string | null;
+  memberships: {
+    organization_id: string;
+    role: "org_admin" | "staff" | null;
+    status: "active" | "suspended" | "left";
+    is_default: boolean;
+    joined_at: string | null;
+  }[];
 };
 
 export type LoginInput = {
@@ -18,6 +26,10 @@ export type LoginInput = {
 export type RegisterOrgInput = {
   organization_name: string;
   service_token: string;
+};
+
+export type SwitchOrgInput = {
+  organization_id: string;
 };
 
 export type RegisterUserInput = {
@@ -36,6 +48,12 @@ export type RegisterUserResponse = AuthTokens & {
   organization_id: string | null;
   user_id: string;
   message: string;
+};
+
+export type SwitchOrgResponse = AuthTokens & {
+  user_id: string;
+  organization_id: string | null;
+  role: "org_admin" | "staff" | null;
 };
 
 export type UserInvitation = {
@@ -138,12 +156,22 @@ export async function registerOrg(input: RegisterOrgInput): Promise<RegisterOrgR
       method: "POST",
       body: JSON.stringify(input),
     },
-    false,
   );
   if (!response.ok) {
     throw await parseApiError(response);
   }
   return (await response.json()) as RegisterOrgResponse;
+}
+
+export async function switchOrg(input: SwitchOrgInput): Promise<SwitchOrgResponse> {
+  const response = await apiFetch("/auth/switch-org", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+  return (await response.json()) as SwitchOrgResponse;
 }
 
 export async function getMyInvitations(): Promise<UserInvitation[]> {
