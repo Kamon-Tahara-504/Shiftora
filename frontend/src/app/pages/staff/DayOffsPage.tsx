@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   ChevronLeft,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { StaffSidebar } from "@/components/staff/StaffSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
+import { useToast } from "@/context/ToastContext";
 import { useDayOffs } from "@/hooks/useDayOffs";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -53,6 +54,7 @@ function getMonthCells(year: number, month: number): CalendarCell[] {
 }
 
 export default function DayOffsPage() {
+  const { showToast } = useToast();
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
@@ -99,6 +101,11 @@ export default function DayOffsPage() {
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [requests, year, month]);
 
+  useEffect(() => {
+    if (!error) return;
+    showToast(error, { variant: "error" });
+  }, [error, showToast]);
+
   return (
     <div className="bg-background-light font-display text-slate-900 antialiased h-screen overflow-hidden flex">
       <StaffSidebar />
@@ -109,13 +116,6 @@ export default function DayOffsPage() {
             title="希望休の申請"
             description="カレンダーから日付を選択して、希望休を申請できます。確定後の変更は管理者へ連絡してください。"
           />
-
-          {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-              <AlertCircle className="size-5 text-red-500" />
-              <p className="text-sm text-red-800">{error}</p>
-            </div>
-          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">

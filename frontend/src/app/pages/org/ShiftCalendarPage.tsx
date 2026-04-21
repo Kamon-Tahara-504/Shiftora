@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
+import { useToast } from "@/context/ToastContext";
 import { useShifts } from "@/hooks/useShifts";
 import { useEmployees } from "@/hooks/useEmployees";
 
@@ -40,6 +41,7 @@ function getCalendarDays(year: number, month: number): CalendarDay[] {
 }
 
 export default function ShiftCalendarPage() {
+  const { showToast } = useToast();
   const today = new Date();
   const [displayYear, setDisplayYear] = useState(today.getFullYear());
   const [displayMonth, setDisplayMonth] = useState(today.getMonth() + 1);
@@ -49,7 +51,6 @@ export default function ShiftCalendarPage() {
   const [editEmployeeId, setEditEmployeeId] = useState("");
   const [editDepartment, setEditDepartment] = useState<"daycare" | "visit">("daycare");
   const [editSlot, setEditSlot] = useState<"AM" | "PM">("AM");
-  const [editError, setEditError] = useState<string | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   useEffect(() => {
@@ -114,14 +115,12 @@ export default function ShiftCalendarPage() {
     setEditEmployeeId(selectedShift.employee_id);
     setEditDepartment(selectedShift.department);
     setEditSlot(selectedShift.slot);
-    setEditError(null);
   }, [selectedShift]);
 
   async function handleSaveShiftEdit() {
     if (!selectedShift) return;
-    setEditError(null);
     if (!editEmployeeId) {
-      setEditError("担当職員を選択してください。");
+      showToast("担当職員を選択してください。", { variant: "error" });
       return;
     }
     setIsSavingEdit(true);
@@ -134,7 +133,7 @@ export default function ShiftCalendarPage() {
       await fetchShifts(displayYear, displayMonth);
       setSelectedShiftId(null);
     } catch (err) {
-      setEditError(err instanceof Error ? err.message : "シフト更新に失敗しました。");
+      showToast(err instanceof Error ? err.message : "シフト更新に失敗しました。", { variant: "error" });
     } finally {
       setIsSavingEdit(false);
     }
@@ -314,11 +313,6 @@ export default function ShiftCalendarPage() {
                   </select>
                 </label>
               </div>
-              {editError ? (
-                <p className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                  {editError}
-                </p>
-              ) : null}
               <div className="mt-4">
                 <button
                   type="button"
