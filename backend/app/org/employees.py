@@ -116,15 +116,19 @@ def get_employee_by_user_id(
     supabase = get_supabase()
     if not supabase:
         return None
-    r = (
-        supabase.table("employees")
-        .select("*")
-        .eq("organization_id", organization_id)
-        .eq("user_id", user_id)
-        .maybe_single()
-        .execute()
-    )
-    return r.data if r.data else None
+    try:
+        r = (
+            supabase.table("employees")
+            .select("*")
+            .eq("organization_id", organization_id)
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+    except Exception:
+        return None
+    data = getattr(r, "data", None)
+    return data if data else None
 
 
 def update_employee(

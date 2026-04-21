@@ -340,7 +340,8 @@ def create_organization_for_user(
         organization_id=str(org_id),
         role=ROLE_ORG_ADMIN,
         status="active",
-        is_default=True,
+        # default の一意制約を考慮し、作成時は false → set_default_membership で切替える。
+        is_default=False,
     ):
         return None, "internal_error"
     if not set_default_membership(user_id, str(org_id)):

@@ -37,6 +37,8 @@ from app.auth.constants import (
     CODE_SUBSCRIPTION_INACTIVE,
     CODE_VALIDATION_ERROR,
     CODE_USER_NOT_FOUND,
+    ROLE_ORG_ADMIN,
+    ROLE_STAFF,
 )
 from app.auth.deps import CurrentUser, get_current_user
 from app.auth.rbac import require_org_admin, require_organization_id
@@ -96,6 +98,59 @@ class InviteRequest(BaseModel):
     """POST /org/invite のリクエスト。MVP では role は staff のみ。"""
     email: EmailStr
     role: Literal["staff"] = "staff"
+
+
+@router.get("/members")
+def members_list(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+):
+    """org_admin / staff 共通。現在の組織に所属するメンバー一覧を返す。"""
+    org_id = require_organization_id(current_user)
+    if current_user.role not in {ROLE_ORG_ADMIN, ROLE_STAFF}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=_error_detail(CODE_FORBIDDEN, FORBIDDEN),
+        )
+    client = get_supabase()
+    if not client:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=_error_detail(CODE_INTERNAL_ERROR, FAILED_CREATE_INVITATION),
+        )
+    memberships_r = (
+        client.table("organization_memberships")
+        .select("user_id, role, status, is_default, joined_at")
+        .eq("organization_id", org_id)
+        .order("is_default", desc=True)
+        .order("joined_at", desc=False)
+        .execute()
+    )
+    memberships = list(memberships_r.data) if memberships_r.data else []
+    user_ids = [str(row["user_id"]) for row in memberships if row.get("user_id")]
+    users_by_id: dict[str, dict[str, Any]] = {}
+    if user_ids:
+        users_r = (
+            client.table("users")
+            .select("id, first_name, last_name, email, is_active")
+            .in_("id", user_ids)
+            .execute()
+        )
+        users = list(users_r.data) if users_r.data else []
+        users_by_id = {str(row["id"]): row for row in users if row.get("id")}
+    return [
+        {
+            "user_id": str(row["user_id"]),
+            "first_name": users_by_id.get(str(row["user_id"]), {}).get("first_name"),
+            "last_name": users_by_id.get(str(row["user_id"]), {}).get("last_name"),
+            "email": users_by_id.get(str(row["user_id"]), {}).get("email"),
+            "membership_role": row.get("role"),
+            "membership_status": row.get("status"),
+            "is_default": bool(row.get("is_default", False)),
+            "joined_at": row.get("joined_at"),
+            "is_active": bool(users_by_id.get(str(row["user_id"]), {}).get("is_active", True)),
+        }
+        for row in memberships
+    ]
 
 
 @router.post("/invite", status_code=status.HTTP_201_CREATED)
@@ -279,7 +334,9 @@ def accept_invitation(
         organization_id=org_id,
         role=inv.get("role", "staff"),
         status="active",
-        is_default=True,
+        # 既存 default があるユーザーでも受諾できるよう、先に非 default で作成し
+        # その後 set_default_membership で1件に正規化する。
+        is_default=False,
     ):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
