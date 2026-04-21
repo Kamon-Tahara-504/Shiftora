@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, UserPlus, X } from "lucide-react";
 import { OrgSidebar } from "@/components/org/OrgSidebar";
 import { EmployeeCreateModal } from "@/components/org/EmployeeCreateModal";
 import { OrgPageHeader } from "@/components/org/OrgPageHeader";
@@ -59,11 +59,11 @@ function StatusBadge({ status }: { status: EmployeeStatus }) {
 
 export default function EmployeesPage() {
   const { showToast } = useToast();
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [isInviting, setIsInviting] = useState(false);
-  const { employees, isLoading, error, addEmployee, patchEmployee, refresh } = useEmployees();
+  const { employees, isLoading, error, patchEmployee, refresh } = useEmployees();
   const { shifts, fetchShifts } = useShifts();
 
   const pageSize = 10;
@@ -110,6 +110,7 @@ export default function EmployeesPage() {
         variant: "success",
       });
       setInviteEmail("");
+      setIsInviteModalOpen(false);
     } catch (err) {
       if (err instanceof ApiError) {
         showToast(err.message, { variant: "error" });
@@ -129,15 +130,15 @@ export default function EmployeesPage() {
         <div className="max-w-6xl mx-auto">
           <OrgPageHeader
             title="職員管理"
-            description="従業員の役割、ステータス、人員構成を管理します。"
+            description="職員のステータスを確認し、登録済みユーザーへ招待を送ります。"
             actions={
               <button
                 type="button"
-                onClick={() => setIsCreateModalOpen(true)}
+                onClick={() => setIsInviteModalOpen(true)}
                 className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-white text-sm md:text-base font-bold rounded-full hover:bg-primary/90 transition-all shadow-sm shadow-primary/20"
               >
-                <Plus className="size-5 md:size-6" />
-                <span>職員を追加</span>
+                <UserPlus className="size-5 md:size-6 shrink-0" />
+                <span>職員を招待する</span>
               </button>
             }
           />
@@ -163,27 +164,6 @@ export default function EmployeesPage() {
               <p className="mt-1 text-[11px] text-slate-500">無効職員 {inactiveCount} 名</p>
             </div>
           </div>
-
-          <section className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-8">
-            <h3 className="text-sm font-bold text-slate-800 mb-3">登録済みユーザー招待</h3>
-            <form className="flex flex-col md:flex-row md:items-start gap-3" onSubmit={handleInvite}>
-              <input
-                className="w-full md:max-w-md px-4 py-2.5 bg-background-light border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm"
-                type="email"
-                placeholder="登録済みユーザーのメールアドレス"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                required
-              />
-              <button
-                type="submit"
-                disabled={isInviting}
-                className="inline-flex items-center justify-center px-4 py-2.5 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 disabled:opacity-60"
-              >
-                {isInviting ? "作成中..." : "招待を作成"}
-              </button>
-            </form>
-          </section>
 
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
@@ -314,23 +294,69 @@ export default function EmployeesPage() {
         </div>
       </main>
 
-      <EmployeeCreateModal
-        open={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        mode="create"
-        onSubmit={async (values) => {
-          try {
-            await addEmployee({
-              name: values.name,
-              department: values.department,
-              status: values.status,
-            });
-            setIsCreateModalOpen(false);
-          } catch {
-            await refresh();
-          }
-        }}
-      />
+      {isInviteModalOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-staff-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-6 py-4">
+              <div>
+                <h2 id="invite-staff-title" className="text-lg font-bold text-slate-900">
+                  職員を招待する
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Shiftora に登録済みのメールアドレス宛に、スタッフとしての招待を作成します。
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsInviteModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="閉じる"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            <form className="px-6 py-5 space-y-4" onSubmit={handleInvite}>
+              <div className="space-y-2">
+                <label htmlFor="invite-email" className="text-sm font-semibold text-slate-700">
+                  メールアドレス
+                </label>
+                <input
+                  id="invite-email"
+                  className="w-full px-4 py-3 bg-background-light border border-primary/20 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary text-sm"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="例: staff@example.com"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsInviteModalOpen(false)}
+                  className="inline-flex justify-center px-4 py-2.5 text-sm font-semibold text-slate-600 rounded-lg border border-slate-200 hover:bg-slate-50"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  disabled={isInviting}
+                  className="inline-flex justify-center items-center gap-2 px-4 py-2.5 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 disabled:opacity-60"
+                >
+                  {isInviting ? "送信中..." : "招待を送る"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
       <EmployeeCreateModal
         open={editingEmployee !== null}
         onClose={() => setEditingEmployee(null)}
